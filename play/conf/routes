@@ -1,0 +1,13 @@
+# Routes
+# This file defines all application routes (Higher priority routes first)
+# ~~~~
+
+# Home page
+GET        /                             controllers.Application.index
+GET        /demo/jumanpp_lattice         controllers.Jumanpp.lattice
+GET        /demo/jumanpp_lattice2        controllers.Jumanpp.lattice2
+GET        /demo/jumanpp_parse           controllers.Jumanpp.lattice_parse
+
+# Map static resources from the /public folder to the /assets URL path
+GET        /assets/*file                 controllers.Assets.at(path="/public", file)
+GET        /webjars/*file                controllers.WebJarAssets.at(file)

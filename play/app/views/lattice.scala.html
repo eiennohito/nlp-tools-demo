@@ -1,0 +1,26 @@
+@(query: String, graph: String)
+<!doctype html>
+<html>
+  <head>
+    <title>Juman++: @query</title>
+    <script src="@routes.Assets.at("javascripts/mermaid.js")"></script>
+    <script>mermaid.initialize({startOnLoad:true});</script>
+    <link rel="stylesheet" href="@routes.Assets.at("stylesheets/main.css")">
+  </head>
+  <body>
+    <h2>Juman++ Demo</h2>
+    <div>
+      <div class="sentence-input">
+        <form action="@routes.Jumanpp.lattice()" method="GET">
+          <input class="input-sentence" name="text" type="text" value="@query">
+          <input class="button" type="submit" title="Analyze">
+        </form>
+      </div>
+      <div>
+        <div class="mermaid lattice">
+          @graph
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

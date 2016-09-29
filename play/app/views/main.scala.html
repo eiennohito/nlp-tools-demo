@@ -1,0 +1,20 @@
+@import org.webjars.play.RequireJS
+@(title: String)(content: Html)
+@import play.api.Play
+
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <title>@title</title>
+        <link rel="stylesheet" media="screen" href="@routes.Assets.at("stylesheets/main.css")">
+        <link rel="shortcut icon" type="image/png" href="@routes.Assets.at("images/favicon.png")">
+        @scalajs.html.scripts(
+          "scalajsclient",
+          name => routes.Assets.at(name).toString,
+          name => getClass.getResource(s"/public/$name") != null)
+    </head>
+    <body>
+        @content
+    </body>
+</html>

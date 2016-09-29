@@ -1,0 +1,72 @@
+@(query: String, version: String)
+<!doctype html>
+<html>
+  <head>
+    <title>Juman++: @query</title>
+    @scalajs.html.scripts(
+      "scalajsclient",
+      name => routes.Assets.at(name).toString,
+      name => getClass.getResource(s"/public/$name") != null)
+    <link rel="stylesheet" href="@routes.Assets.at("stylesheets/main.css")">
+    <script>
+      "use strict";
+
+      function doRender() {
+        var content =  $("#data").val();
+        if (content.length > 0) {
+          var url = "@{routes.Jumanpp.lattice_parse()}";
+          GraphRenderer().render(url, content).then(function(g) {
+            console.log(g);
+            var svg = d3.select("#graph");
+            svg.select('g').remove();
+            var inner = svg.append("g");
+
+            var render = new dagreD3.render();
+            render(inner, g);
+
+            inner.attr("transform", "translate(0, 30)");
+            svg.attr("height", g.graph().height + 60);
+            svg.attr("width", g.graph().width);
+
+            var top1 = GraphRenderer().getReprForRank(1);
+            $("#top1").text(top1);
+          });
+        }
+      }
+
+      $("#send").on('click', function (e) {
+        doRender();
+        return false;
+      });
+
+      $(document).ready(function () {
+        doRender();
+      });
+
+    </script>
+  </head>
+  <body>
+    <h2>Juman++ Demo</h2>
+    <div>
+      <div class="sentence-input">
+        <form>
+          <input id="data" class="input-sentence" name="text" type="text" value="@query">
+          <input id="send" class="button" type="submit" title="Analyze">
+        </form>
+      </div>
+      <div>
+        <div class="result">
+          <div class="top">
+            <pre id="top1"></pre>
+          </div>
+        </div>
+        <div class="lattice" style="width: 100%; overflow: auto">
+          <svg id="graph" ></svg>
+        </div>
+      </div>
+    </div>
+    <div>
+      Using: @version
+    </div>
+  </body>
+</html>

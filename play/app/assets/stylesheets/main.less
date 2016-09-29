@@ -1,0 +1,66 @@
+.lattice {
+  .simple {
+    fill: none;
+    stroke: none;
+    font-family: Meiryo, sans-serif;
+    font-style: normal;
+    font-weight: normal;
+  }
+
+  .connection > path.path {
+    stroke: black;
+  }
+
+  .rank-1 > path {
+    stroke: red !important;
+    arrow-fill: red !important;
+  }
+
+  .pos-container .absent {
+    display: none !important;
+  }
+
+  .node-label {
+    div.pos-row div {
+      display: inline-block;
+      margin-right: 3px;
+    }
+
+    .canonical {
+      font-size: x-small;
+    }
+
+    .surface {
+      font-size: 16px;
+    }
+
+    .pos-info {
+      font-size: 8px;
+    }
+
+    margin: 3px;
+  }
+
+  div.ranks {
+    font-size: x-small;
+    max-width: 1cm;
+    background: rgba(48, 94, 136, 0.5);
+    color: #d0ffde;
+    height: auto;
+    white-space: normal;
+    border: 1px solid rgba(48, 94, 136, 0.5);
+  }
+}
+
+.sentence-input {
+  input {
+    font-size: 16px;
+  }
+
+  .input-sentence {
+    width: 70%;
+    font-family: Meiryo, sans-serif;
+  }
+
+  margin-bottom: 5mm;
+}
