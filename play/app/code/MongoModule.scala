@@ -37,10 +37,12 @@ class MongoModule extends Module {
   @Provides
   def worker(
     conn: MongoConnection,
-    ec: ExecutionContext
+    ec: ExecutionContext,
+    cfg: Configuration
   ): MongoWorker = {
     import scala.concurrent.duration._
-    val db = Await.result(conn.database("morph_demo")(ec), 2.seconds)
+    val dbname = cfg.getString("mongo.db").getOrElse("morph_demo")
+    val db = Await.result(conn.database(dbname)(ec), 2.seconds)
     new MongoWorker(db)(ec)
   }
 }
