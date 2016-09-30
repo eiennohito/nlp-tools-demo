@@ -9,7 +9,8 @@ lazy val playserver = (project in file("play")).settings(
   libraryDependencies ++= Seq(
     "com.vmunier" %% "scalajs-scripts" % "1.0.0",
     "org.webjars" %% "webjars-play" % "2.5.0",
-    "com.lihaoyi" %% "upickle" % "0.4.1"
+    "com.lihaoyi" %% "upickle" % "0.4.1",
+    "org.reactivemongo" %% "reactivemongo" % "0.11.14"
   ),
   pipelineStages in Assets := Seq(scalaJSPipeline)
 ).enablePlugins(PlayScala).

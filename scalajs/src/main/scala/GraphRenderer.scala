@@ -21,11 +21,20 @@ object GraphRenderer {
 
   @JSExport
   def render(api: String, text: String): JQueryPromise = {
+    analyzeText(api, text).`then`(handleResponse _)
+  }
+
+  @JSExport
+  def analyzeText(api: String, text: String): JQueryPromise = {
     val qurl = s"$api?text=$text"
-    jq.ajax(qurl, JQueryAjaxSettings.contentType("text/plain")._result).`then`(handleResponse _)
+    jq.ajax(qurl, JQueryAjaxSettings.contentType("text/plain")._result)
   }
 
   def nid(n: JumanppLatticeNode) = s"N#${n.num}"
+
+
+  @JSExport
+  def lattice() = stored
 
   var stored: JumanppLattice = null
 

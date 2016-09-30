@@ -9,6 +9,7 @@ import com.google.inject.{Binder, Module}
 class MainModule extends Module {
   override def configure(binder: Binder): Unit = {
     binder.install(new JumanppModule)
+    binder.install(new MongoModule)
   }
 }
 

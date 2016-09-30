@@ -3,11 +3,12 @@ package controllers
 import java.util.concurrent.Callable
 
 import code._
-import com.google.common.cache.{Cache, CacheBuilder}
+import com.google.common.cache.CacheBuilder
 import com.google.inject.Inject
 import com.typesafe.scalalogging.StrictLogging
-import play.api.mvc.{Action, Controller}
-import ws.kotonoha.akane.analyzers.jumanpp.wire.LatticeNode.LatticeNodeLens
+import org.joda.time.{DateTime, DateTimeZone}
+import play.api.mvc._
+import reactivemongo.bson.BSONObjectID
 import ws.kotonoha.akane.analyzers.jumanpp.wire.{Lattice, LatticeNode}
 import ws.kotonoha.akane.parser.JumanPosSet
 
@@ -18,8 +19,9 @@ import scala.concurrent.{ExecutionContext, Future}
   * @since 2016/09/28
   */
 class Jumanpp @Inject() (
-  jc: JumanppCache
-)(implicit ec: ExecutionContext) extends Controller {
+  jc: JumanppCache,
+  mwork: MongoWorker
+)(implicit ec: ExecutionContext) extends Controller with StrictLogging {
   def lattice() = Action.async { req =>
     val graph = req.getQueryString("text") match {
       case None => Future.successful("")
@@ -33,15 +35,43 @@ class Jumanpp @Inject() (
     Ok(views.html.lattice2(query, jc.version))
   }
 
+  def log(id: BSONObjectID, l: Lattice, txt: String, req: Request[AnyContent], nanoStart: Long): Unit = {
+    val millis = (System.nanoTime() - nanoStart) * 1e-6
+    val ip = req.remoteAddress
+    val ua = req.headers.get("User-Agent")
+
+    val anal = JppAnalysis(id,
+      DateTime.now(DateTimeZone.UTC),
+      txt,
+      l,
+      jc.version,
+      jc.dicVersion,
+      ip,
+      ua.getOrElse("empty"),
+      millis,
+      None
+    )
+
+    mwork.save(anal).onFailure {
+      case e: Exception => logger.warn(s"could not save analysis results for input: $txt", e)
+    }
+  }
+
   def lattice_parse() = Action.async { req =>
     req.getQueryString("text") match {
       case None => Future.successful(Ok("null"))
       case Some(txt) =>
         val part = txt.take(512)
-        jc.get(part).map { l =>
+        val latF = jc.get(part)
+        val start = System.nanoTime()
+        val id = reactivemongo.bson.generateId
+        latF.foreach(l => log(id, l, txt, req, start))
+        latF.map { l =>
           val posset = JumanPosSet.default
 
-          val tansformed = JumanppLattice(l.nodes.map { n =>
+          val tansformed = JumanppLattice(
+            id.stringify,
+            l.nodes.map { n =>
             val po = n.pos
             val pos = posset.pos(po.pos)
             val subpos = pos.subtypes(po.subpos)
@@ -113,6 +143,7 @@ object LatticeFormatter {
 class JumanppCache @Inject() (
   jpp: JumanppService
 )(implicit ec: ExecutionContext) extends StrictLogging {
+  def dicVersion: String = jpp.dicVersion
   def version: String = jpp.version
 
   private val cache = CacheBuilder.newBuilder().maximumSize(10000).build[String, Future[Lattice]]()

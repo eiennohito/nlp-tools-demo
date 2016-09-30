@@ -37,4 +37,4 @@ case class JumanppFeature(
   value: Option[String]
 )
 
-case class JumanppLattice(nodes: Seq[JumanppLatticeNode], comment: String)
+case class JumanppLattice(id: String, nodes: Seq[JumanppLatticeNode], comment: String)

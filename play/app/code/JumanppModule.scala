@@ -1,9 +1,8 @@
 package code
 
-import java.time.LocalTime
+import java.nio.file.{Files, Paths}
 import java.util.concurrent.TimeUnit
 
-import akka.actor.Actor.Receive
 import akka.actor.{Actor, ActorRef, ActorRefFactory, ActorSystem, PoisonPill, Props, Scheduler}
 import akka.util.Timeout
 import com.google.inject._
@@ -12,8 +11,8 @@ import com.typesafe.scalalogging.StrictLogging
 import org.apache.commons.io.IOUtils
 import org.joda.time.DateTime
 import play.api.Configuration
-import ws.kotonoha.akane.analyzers.jumanpp.{JumanppActor, JumanppConfig}
 import ws.kotonoha.akane.analyzers.jumanpp.wire.Lattice
+import ws.kotonoha.akane.analyzers.jumanpp.{JumanppActor, JumanppConfig}
 import ws.kotonoha.akane.io.Charsets
 
 import scala.annotation.tailrec
@@ -38,10 +37,12 @@ class JumanppModule extends Module {
 trait JumanppService {
   def actor: ActorRef
   def version: String
+  def dicVersion: String
 
   def analyze(data: String)(implicit ec: ExecutionContext): Future[Lattice] = {
-    import scala.concurrent.duration._
     import akka.pattern.ask
+
+    import scala.concurrent.duration._
     implicit val timeout: Timeout = 10.seconds
     val query = JumanppActor.AnalyzeRequest(Nil, data)
     actor.ask(query).map {
@@ -51,19 +52,40 @@ trait JumanppService {
   }
 }
 
-class JumanppServiceImpl(val version: String, val actor: ActorRef) extends JumanppService
+class JumanppServiceImpl(val version: String, val dicVersion: String, val actor: ActorRef) extends JumanppService
 
-class JumanppServiceFactory(cfg: Config, sched: Scheduler, afact: ActorRefFactory)(implicit ec: ExecutionContext) extends JumanppService with StrictLogging {
+class JumanppServiceFactory(
+  cfg: Config,
+  sched: Scheduler,
+  afact: ActorRefFactory
+)(implicit ec: ExecutionContext) extends JumanppService with StrictLogging {
+
   private val jppConfig = JumanppConfig(cfg)
+
+  @volatile
   private var internal: Future[JumanppService] = makeInstance()
+
+  import scala.concurrent.duration._
+  sched.schedule(1.day, 1.day) {
+    val ver = getVersion()
+    val dic = getDicVersion(jppConfig)
+
+    if ((ver.nonEmpty && ver.get != version) || (dic.nonEmpty && dic.get != dicVersion)) {
+      val f = makeInstance()
+      val prev = internal
+      f.foreach { _ =>
+        internal = f
+        prev.map(_.actor ! PoisonPill)
+      }
+    }
+  }
 
   import scala.concurrent.duration._
 
   private def getVersion(): Option[String] = {
     import scala.collection.JavaConverters._
-    val jpc = JumanppConfig(cfg)
-    logger.debug(s"jumnapp config: $jpc")
-    val pb = new ProcessBuilder(jpc.executable, "-v")
+    logger.debug(s"jumnapp config: $jppConfig")
+    val pb = new ProcessBuilder(jppConfig.executable, "-v")
     try {
       val proc = pb.start()
       proc.waitFor(1, TimeUnit.SECONDS)
@@ -76,24 +98,50 @@ class JumanppServiceFactory(cfg: Config, sched: Scheduler, afact: ActorRefFactor
     }
   }
 
+  private def getDicVersion(c: JumanppConfig): Option[String] = {
+    c.resources.orElse {
+      try {
+        val path = Paths.get(System.getProperty("user.home"), ".jumanpprc")
+        val lines = Files.readAllLines(path, Charsets.utf8)
+        Some(lines.get(0))
+      } catch {
+        case e: Exception => None
+      }
+    }.flatMap { r =>
+      try {
+        val path = Paths.get(r, "version")
+        if (Files.exists(path)) {
+          Some(Files.readAllLines(path, Charsets.utf8).get(0))
+        } else None
+      } catch {
+        case e: Exception =>
+          logger.warn(s"could not extract version from config $c", e)
+          None
+      }
+    }
+  }
+
   private def makeInstance() = {
     import scala.concurrent.duration._
-    val props = Props(new JumanppActor(cfg))
+    val props = Props(new JumanppActor(jppConfig))
     val realProps = Props(new TokenBasedParent(props, 3, 9.seconds))
     getVersion() match {
       case Some(v) =>
         val aref = afact.actorOf(realProps)
-        Future.successful(new JumanppServiceImpl(v, aref))
+        val dicVersion = getDicVersion(jppConfig).getOrElse(v)
+        Future.successful(new JumanppServiceImpl(v, dicVersion, aref))
       case None =>
         Future.failed(new Exception("could not get version of juman++"))
     }
   }
 
 
-
+  override def dicVersion: String = Await.result(internal.map(_.dicVersion), 10.seconds)
   override def actor: ActorRef = Await.result(internal.map(_.actor), 10.seconds)
   override def version: String = Await.result(internal.map(_.version), 10.seconds)
-  override def analyze(data: String)(implicit ec: ExecutionContext): Future[Lattice] = internal.flatMap(_.analyze(data))
+  override def analyze(data: String)(implicit ec: ExecutionContext): Future[Lattice] = {
+    internal.flatMap(_.analyze(data))
+  }
 }
 
 class TokenBasedActor(childFactory: Props) extends Actor {
