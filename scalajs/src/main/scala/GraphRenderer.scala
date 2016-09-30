@@ -1,5 +1,4 @@
 import code.{JumanppLattice, JumanppLatticeNode, NodeScores}
-import org.querki.jquery.{JQueryAjaxSettings, JQueryPromise, JQueryStatic}
 
 import scala.collection.generic.CanBuildFrom
 import scala.scalajs.js
@@ -8,8 +7,6 @@ import scala.scalajs.js.annotation.JSExport
 
 @JSExport
 object GraphRenderer {
-
-  val jq = JQueryStatic
 
   val BOSnode = JumanppLatticeNode(
     0, 0,
@@ -20,16 +17,19 @@ object GraphRenderer {
     NodeScores(0, 0, 0)
   )
 
+  val jq = js.Dynamic.global.jQuery
+
   @JSExport
-  def render(api: String, text: String): JQueryPromise = {
+  def render(api: String, text: String) = {
     analyzeText(api, text).`then`(handleResponse _)
   }
 
   @JSExport
-  def analyzeText(api: String, text: String): JQueryPromise = {
+  def analyzeText(api: String, text: String) = {
     val encoded = js.URIUtils.encodeURIComponent(text)
     val qurl = s"$api?text=$encoded"
-    jq.ajax(qurl, JQueryAjaxSettings.contentType("text/plain")._result)
+
+    jq.ajax(qurl, js.Dynamic.literal(method = "GET"))
   }
 
   def nid(n: JumanppLatticeNode) = s"N#${n.num}"

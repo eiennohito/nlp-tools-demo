@@ -38,3 +38,13 @@ case class JumanppFeature(
 )
 
 case class JumanppLattice(id: String, nodes: Seq[JumanppLatticeNode], comment: String)
+
+case class AnalysisResult(
+  id: String,
+  date: String,
+  text: String,
+  lattice: JumanppLattice,
+  version: String,
+  dicVersion: String,
+  fixes: Option[Seq[Int]]
+)

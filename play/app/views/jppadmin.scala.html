@@ -1,0 +1,21 @@
+@()
+<!doctype html>
+<html>
+  <head>
+    <title>Juman++ Admin</title>
+    @scalajs.html.scripts(
+      "scalajsclient",
+      name => routes.Assets.at(name).toString,
+      name => getClass.getResource(s"/public/$name") != null)
+    <link rel="stylesheet" href="@routes.Assets.at("stylesheets/main.css")">
+    <script>
+      $(document).ready(function() {
+        var node = document.getElementById("body");
+        JppAdmin().init(node, "@routes.JumanppAdmin.queries()");
+      });
+    </script>
+  </head>
+  <body>
+    <div id="body"></div>
+  </body>
+</html>

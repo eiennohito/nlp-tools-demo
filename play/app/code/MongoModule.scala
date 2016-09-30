@@ -4,6 +4,7 @@ import com.google.inject.{Binder, Module, Provides, Singleton}
 import org.joda.time.DateTime
 import play.api.Configuration
 import play.api.inject.ApplicationLifecycle
+import play.api.mvc.Result
 import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.api.commands.{GetLastError, UpdateWriteResult, WriteResult}
 import reactivemongo.api.{DefaultDB, MongoConnection, MongoDriver}
@@ -83,7 +84,6 @@ object MongoObjects {
 }
 
 class MongoWorker(db: DefaultDB)(implicit ec: ExecutionContext) {
-
   private val coll = db.collection[BSONCollection]("analysis")
 
   import MongoObjects._
@@ -110,6 +110,17 @@ class MongoWorker(db: DefaultDB)(implicit ec: ExecutionContext) {
 
   def save(analysis: JppAnalysis): Future[WriteResult] = {
     coll.insert(analysis)
+  }
+
+  def get(from: Int, limit: Int, fixed: Boolean, sorting: BSONDocument): Future[Seq[JppAnalysis]] = {
+    val q = if (fixed) BSONDocument(
+      "reported" -> BSONDocument(
+        "$exists" -> true
+      )
+    ) else BSONDocument.empty
+
+    val qo = coll.find(q).sort(sorting)
+    qo.options(qo.options.skip(from)).cursor[JppAnalysis]().collect[Seq](limit)
   }
 
 }

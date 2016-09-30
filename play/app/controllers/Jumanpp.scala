@@ -72,37 +72,8 @@ class Jumanpp @Inject() (
         val id = reactivemongo.bson.generateId
         latF.foreach(l => log(id, l, txt, req, start))
         latF.map { l =>
-          val posset = JumanPosSet.default
-
-          val tansformed = JumanppLattice(
-            id.stringify,
-            l.nodes.map { n =>
-            val po = n.pos
-            val pos = posset.pos(po.pos)
-            val subpos = pos.subtypes(po.subpos)
-            val ctype = posset.conjugatons(po.category)
-            val conj = ctype.conjugations(po.conjugation)
-            val features = n.features.map {jo => JumanppFeature(jo.key, jo.value)}
-            JumanppLatticeNode(
-              n.nodeId,
-              n.startIndex,
-              n.surface,
-              n.canonic,
-              n.reading,
-              n.midasi,
-              pos.name, subpos.name, ctype.name, conj.name,
-              po.pos, po.subpos, po.category, po.conjugation,
-              n.prevNodes,
-              n.rank,
-              features,
-              NodeScores(
-                n.featureScore,
-                n.lmScore,
-                n.morphAnalysisScore
-              )
-            )
-          }, l.comment.getOrElse(""))
-          val string = upickle.default.write(tansformed)
+          val transformed = JumanppConversion.convertLatttice(id, l)
+          val string = upickle.default.write(transformed)
           Ok(string)
         }
     }
@@ -111,6 +82,41 @@ class Jumanpp @Inject() (
   def report() = Action.async(parse.json[ReportForAnalyze]) { req =>
     val obj = req.body
     mwork.updateReport(obj.id, obj.ids).map { _ => Ok("Ok") }
+  }
+}
+
+object JumanppConversion {
+  val posset = JumanPosSet.default
+
+  def convertLatttice(id: BSONObjectID, l: Lattice) = {
+    JumanppLattice(
+      id.stringify,
+      l.nodes.map { n =>
+        val po = n.pos
+        val pos = posset.pos(po.pos)
+        val subpos = pos.subtypes(po.subpos)
+        val ctype = posset.conjugatons(po.category)
+        val conj = ctype.conjugations(po.conjugation)
+        val features = n.features.map {jo => JumanppFeature(jo.key, jo.value)}
+        JumanppLatticeNode(
+          n.nodeId,
+          n.startIndex,
+          n.surface,
+          n.canonic,
+          n.reading,
+          n.midasi,
+          pos.name, subpos.name, ctype.name, conj.name,
+          po.pos, po.subpos, po.category, po.conjugation,
+          n.prevNodes,
+          n.rank,
+          features,
+          NodeScores(
+            n.featureScore,
+            n.lmScore,
+            n.morphAnalysisScore
+          )
+        )
+      }, l.comment.getOrElse(""))
   }
 }
 
