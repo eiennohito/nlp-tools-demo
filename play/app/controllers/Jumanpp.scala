@@ -41,7 +41,7 @@ class Jumanpp @Inject() (
 
   def log(id: BSONObjectID, l: Lattice, txt: String, req: Request[AnyContent], nanoStart: Long): Unit = {
     val millis = (System.nanoTime() - nanoStart) * 1e-6
-    val ip = req.remoteAddress
+    val ip = req.headers.get("X-Real-IP").getOrElse(req.remoteAddress)
     val ua = req.headers.get("User-Agent")
 
     val anal = JppAnalysis(
