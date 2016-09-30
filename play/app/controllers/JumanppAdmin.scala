@@ -24,9 +24,9 @@ class JumanppAdmin @Inject() (
     val from = req.getQueryString("from").flatMap(XInt.unapply).getOrElse(0)
     val fixed = req.getQueryString("fixed").contains("true")
     val sorting = req.getQueryString("sorting").collect({
-      case "date" => BSONDocument("date" -> 1)
-      case "date-" => BSONDocument("date" -> -1)
-    }).getOrElse(BSONDocument("date" -> 1))
+      case "date" => BSONDocument("timestamp" -> 1)
+      case "date-" => BSONDocument("timestamp" -> -1)
+    }).getOrElse(BSONDocument("timestamp" -> 1))
 
     mw.get(from, 100, fixed, sorting).map { items =>
       val dateFormatter = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm")
