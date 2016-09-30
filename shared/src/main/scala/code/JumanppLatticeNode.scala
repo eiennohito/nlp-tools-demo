@@ -11,6 +11,7 @@ case class JumanppLatticeNode(
   surface: String,
   repr: String,
   reading: String,
+  midasi: String,
   pos: String,
   subpos: String,
   conjtype: String,
@@ -21,7 +22,14 @@ case class JumanppLatticeNode(
   conjformId: Int,
   previous: Seq[Int],
   rank: Seq[Int],
-  features: Seq[JumanppFeature]
+  features: Seq[JumanppFeature],
+  scores: NodeScores
+)
+
+case class NodeScores(
+  features: Float,
+  languageModel: Float,
+  morphAnalysis: Float
 )
 
 case class JumanppFeature(

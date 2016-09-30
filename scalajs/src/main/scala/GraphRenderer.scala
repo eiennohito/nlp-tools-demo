@@ -1,4 +1,4 @@
-import code.{JumanppLattice, JumanppLatticeNode}
+import code.{JumanppLattice, JumanppLatticeNode, NodeScores}
 import org.querki.jquery.{JQueryAjaxSettings, JQueryPromise, JQueryStatic}
 
 import scala.scalajs.js
@@ -12,10 +12,11 @@ object GraphRenderer {
 
   val BOSnode = JumanppLatticeNode(
     0, 0,
-    "BOS", "BOS", "",
+    "BOS", "BOS", "", "",
     "", "", "", "",
     0, 0, 0, 0,
-    Seq.empty, Seq.empty, Seq.empty
+    Seq.empty, Seq.empty, Seq.empty,
+    NodeScores(0, 0, 0)
   )
 
   @JSExport
@@ -37,11 +38,17 @@ object GraphRenderer {
 
     val totalSize = data.nodes.flatMap(_.rank).distinct.size
 
-    graph.setNode(nid(BOSnode), NodeConfig(0, label = "BOS"))
+    graph.setNode(nid(BOSnode), NodeConfig(0, label = "BOS", tooltip = "Begin of Sentence"))
 
     for (n <- data.nodes) {
       val nodeClasses = n.rank.map(r => s"rank-$r").mkString("simple ", " ", "")
-      graph.setNode(nid(n), NodeConfig(n.num, label = renderNode(n), cls = nodeClasses))
+      graph.setNode(nid(n),
+        NodeConfig(
+          n.num,
+          label = renderNode(n),
+          cls = nodeClasses,
+          tooltip = renderTooltip(n)
+        ))
       val prev = n.previous
       for (p <- prev) {
         val prevNode = byId.getOrElse(p, BOSnode)
@@ -55,6 +62,55 @@ object GraphRenderer {
     }
 
     graph
+  }
+
+  private def renderTooltip(n: JumanppLatticeNode) = {
+    import scalatags.JsDom.all._
+
+    val features = n.features.map { f =>
+      val value = f.value match {
+        case None => span(`class` := "value empty")
+        case Some(s) => span(`class` := "value", s)
+      }
+      div(
+        `class` := "feature",
+        span(`class`:="name", f.name),
+        value
+      )
+    }
+
+    val sobj = n.scores
+    val scores = div(
+      `class`:= "scores",
+      div(
+        `class` := "header",
+        "Scores"
+      ),
+      div(
+        `class`:= "lang-model",
+        sobj.languageModel.formatted("LM: %.3e")
+      ),
+      div(
+        `class`:= "features",
+        sobj.features.formatted("Feat: %.3e")
+      ),
+      div(
+        `class`:= "morph-analysis",
+        sobj.morphAnalysis.formatted("MA: %.3e")
+      )
+    )
+
+    val featureTag = if (n.features.nonEmpty) div(
+      div(
+        `class` := "header",
+        "Features"
+      ),
+      features
+    ) else div()
+    div(
+      featureTag,
+      scores
+    ).render
   }
 
   def compressSeq(iseq: IndexedSeq[Int]): String = {

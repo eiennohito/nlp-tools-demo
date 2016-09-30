@@ -24,13 +24,15 @@ object NodeConfig {
   def apply(
     id: Int,
     label: js.Any = "",
-    cls: String = "simple"
+    cls: String = "simple",
+    tooltip: js.Any = ""
   ): NodeConfig = js.Dynamic.literal(
     id = s"node-$id",
     label = label,
     labelType = "html",
     `class` = cls,
-    padding = 0
+    padding = 0,
+    tooltip = tooltip
   ).asInstanceOf[NodeConfig]
 }
 

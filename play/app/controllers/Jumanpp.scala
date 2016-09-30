@@ -2,7 +2,7 @@ package controllers
 
 import java.util.concurrent.Callable
 
-import code.{JumanppFeature, JumanppLattice, JumanppLatticeNode, JumanppService}
+import code._
 import com.google.common.cache.{Cache, CacheBuilder}
 import com.google.inject.Inject
 import com.typesafe.scalalogging.StrictLogging
@@ -54,11 +54,17 @@ class Jumanpp @Inject() (
               n.surface,
               n.canonic,
               n.reading,
+              n.midasi,
               pos.name, subpos.name, ctype.name, conj.name,
               po.pos, po.subpos, po.category, po.conjugation,
               n.prevNodes,
               n.rank,
-              features
+              features,
+              NodeScores(
+                n.featureScore,
+                n.lmScore,
+                n.morphAnalysisScore
+              )
             )
           }, l.comment.getOrElse(""))
           val string = upickle.default.write(tansformed)

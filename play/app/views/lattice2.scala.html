@@ -7,6 +7,7 @@
       "scalajsclient",
       name => routes.Assets.at(name).toString,
       name => getClass.getResource(s"/public/$name") != null)
+    <script src="@routes.Assets.at("javascripts/jquery.tipsy.js")"></script>
     <link rel="stylesheet" href="@routes.Assets.at("stylesheets/main.css")">
     <script>
       "use strict";
@@ -27,6 +28,14 @@
             inner.attr("transform", "translate(0, 30)");
             svg.attr("height", g.graph().height + 60);
             svg.attr("width", g.graph().width);
+
+            inner.selectAll('g.node')
+                .each(function (v) {
+                  $(this).tipsy({
+                    opacity: 0.8, html: true, gravity: 's',
+                    title: function() { return g.node(v).tooltip; }
+                  })
+                });
 
             var top1 = GraphRenderer().getReprForRank(1);
             $("#top1").text(top1);
