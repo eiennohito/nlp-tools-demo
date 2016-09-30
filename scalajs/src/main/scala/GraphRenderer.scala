@@ -248,7 +248,7 @@ object GraphRenderer {
       }
       bldr.append(n.surface).append(" ")
       bldr.append(n.reading).append(" ")
-      bldr.append(n.repr.substring(0, n.repr.indexOf('/'))).append(" ")
+      bldr.append(n.midasi).append(" ")
 
       bldr.append(n.pos).append(" ")
       bldr.append(n.posId).append(" ")
