@@ -1,6 +1,7 @@
 import code.{JumanppLattice, JumanppLatticeNode, NodeScores}
 import org.querki.jquery.{JQueryAjaxSettings, JQueryPromise, JQueryStatic}
 
+import scala.collection.generic.CanBuildFrom
 import scala.scalajs.js
 import scala.scalajs.js.annotation.JSExport
 
@@ -26,7 +27,8 @@ object GraphRenderer {
 
   @JSExport
   def analyzeText(api: String, text: String): JQueryPromise = {
-    val qurl = s"$api?text=$text"
+    val encoded = js.URIUtils.encodeURIComponent(text)
+    val qurl = s"$api?text=$encoded"
     jq.ajax(qurl, JQueryAjaxSettings.contentType("text/plain")._result)
   }
 
@@ -36,12 +38,17 @@ object GraphRenderer {
   @JSExport
   def lattice() = stored
 
+  @JSExport
+  def latticeId() = stored.id
+
   var stored: JumanppLattice = null
+  var marked: Map[Int, Boolean] = Map.empty
 
   def handleResponse(resp: js.Any): js.Any = {
     import upickle.default._
     val data = read[JumanppLattice](resp.asInstanceOf[String])
     stored = data
+    marked = Map.empty
     val graph = new DagreGraph().setGraph(GraphConfig())
     val byId = data.nodes.map(n => n.num -> n).toMap
 
@@ -294,9 +301,128 @@ object GraphRenderer {
     bldr.result()
   }
 
+  def featureObjRepr(n: JumanppLatticeNode) = {
+    import scalatags.JsDom.all._
+
+    if (n.features.isEmpty && featureless.contains(n.pos)) {
+      span(`class` := "features empty", "NIL")
+    } else {
+      val f1 = span(
+        `class` := "repr",
+        "代表表記:",
+        n.repr
+      )
+
+      val other = n.features.map { f =>
+        span(
+          `class` := "generic",
+          f.name,
+          if (f.value.isDefined) ":" else "",
+          if (f.value.isDefined) f.value.get else ""
+        )
+      }
+
+      span( `class` := "features",
+        "\"",
+        interleave(f1 +: other, stringFrag(" ")),
+        "\""
+      )
+    }
+  }
+
+  def interleave[T, U >: T](cont: Seq[T], sep: U)(implicit cbf: CanBuildFrom[Seq[T], U, Seq[U]]): Seq[U] = {
+    if (cont.isEmpty) return Seq.empty
+
+    val bldr = cbf()
+    val iter = cont.iterator
+
+    while (iter.hasNext) {
+      bldr += iter.next()
+      if (iter.hasNext) {
+        bldr += sep
+      }
+    }
+
+    bldr.result()
+  }
+
+  @JSExport
+  def objReprFor(rank: Int) = objRepr(lattice(), rank)
+
+  def changeValue(num: Int) = {
+    marked = marked + (num -> !marked.getOrElse(num, false))
+  }
+
+  @JSExport
+  def markedIds(): js.Array[Int] = {
+    val ids = marked.flatMap { case (k, v) => if (v) List(k) else Nil }
+    js.Array(ids.toArray.sorted: _*)
+  }
+
+  def objRepr(l: JumanppLattice, rank: Int) = {
+    val nodes = l.nodes.filter(_.rank.contains(rank))
+    import scalatags.JsDom.all._
+
+    var lastPos = -1
+
+    val content = nodes.map { n =>
+      val tag = div(
+        `class` := "node-line",
+        div(
+          `class` := "checkboxes",
+          input(
+            `name` := s"node-${n.num}",
+            `type` := "checkbox",
+            cls := "report-visible",
+            onclick := { () => changeValue(n.num) }
+          )
+        ),
+        div(
+          `class` := "jpp-content",
+          if (lastPos == n.startIdx) {
+            span(
+              `class` := "variant",
+              "@ "
+            )
+          } else (),
+          span(`class` := "surface", n.surface), span(" "),
+          span(`class` := "reading", n.reading), span(" "),
+          span(`class` := "midasi", n.midasi), span(" "),
+          span(`class` := "pos", n.pos), span(" "),
+          span(`class` := "posId num", n.posId), span(" "),
+          span(`class` := "subpos", n.subpos), span(" "),
+          span(`class` := "subposId num", n.subposId), span(" "),
+          span(`class` := "conjtype", n.conjtype), span(" "),
+          span(`class` := "conjtypeId num", n.conjtypeId), span(" "),
+          span(`class` := "conjform", n.conjform), span(" "),
+          span(`class` := "conjformId num", n.conjformId), span(" "),
+          featureObjRepr(n)
+        ),
+        br
+      )
+      lastPos = n.startIdx
+      tag
+    }
+
+    div(
+      content,
+      div(cls := "node-line", "EOS", br),
+      div(
+        cls := "report-line",
+        span(
+          cls := "report-visible",
+          "間違った形態素を選択してください"
+        ),
+        button(
+          cls := "report-btn",
+          "解析誤りの報告"
+        )
+      )
+    ).render
+  }
+
   val featureless = Seq("指示詞", "助詞", "判定詞")
 }
-
 
 object PostagsForDisplay {
   val pos = Map(
@@ -430,49 +556,50 @@ object PostagsForDisplay {
     "ダ列タ形" -> "タ",
     "ダ列タ系推量形" -> "タ推",
     "ダ列タ系省略推量形" -> "タ推r",
-    "ダ列タ系条件形" -> "ダ列タ系条件形",
+    "ダ列タ系条件形" -> "タ条",
     "ダ列タ系連用テ形" -> "テ",
-    "ダ列タ系連用タリ形" -> "ダ列タ系連用タリ形",
-    "ダ列タ系連用ジャ形" -> "ダ列タ系連用ジャ形",
-    "ダ列文語連体形" -> "ダ列文語連体形",
-    "ダ列文語条件形" -> "ダ列文語条件形",
-    "デアル列基本形" -> "デアル列基本形",
-    "デアル列命令形" -> "デアル列命令形",
-    "デアル列基本推量形" -> "デアル列基本推量形",
-    "デアル列基本省略推量形" -> "デアル列基本省略推量形",
-    "デアル列基本条件形" -> "デアル列基本条件形",
-    "デアル列基本連用形" -> "デアル列基本連用形",
-    "デアル列タ形" -> "デアル列タ形",
-    "デアル列タ系推量形" -> "デアル列タ系推量形",
-    "デアル列タ系省略推量形" -> "デアル列タ系省略推量形",
-    "デアル列タ系条件形" -> "デアル列タ系条件形",
-    "デアル列タ系連用テ形" -> "デアル列タ系連用テ形",
-    "デアル列タ系連用タリ形" -> "デアル列タ系連用タリ形",
-    "デス列基本形" -> "デス列基本形",
-    "デス列音便基本形" -> "デス列音便基本形",
-    "デス列基本推量形" -> "デス列基本推量形",
-    "デス列音便基本推量形" -> "デス列音便基本推量形",
-    "デス列基本省略推量形" -> "デス列基本省略推量形",
-    "デス列音便基本省略推量形" -> "デス列音便基本省略推量形",
-    "デス列タ形" -> "デス列タ形",
-    "デス列タ系推量形" -> "デス列タ系推量形",
-    "デス列タ系省略推量形" -> "デス列タ系省略推量形",
-    "デス列タ系条件形" -> "デス列タ系条件形",
-    "デス列タ系連用テ形" -> "デス列タ系連用テ形",
-    "デス列タ系連用タリ形" -> "デス列タ系連用タリ形",
-    "ヤ列基本形" -> "ヤ列基本形",
-    "ヤ列基本推量形" -> "ヤ列基本推量形",
-    "ヤ列基本省略推量形" -> "ヤ列基本省略推量形",
-    "ヤ列タ形" -> "ヤ列タ形",
-    "ヤ列タ系推量形" -> "ヤ列タ系推量形",
-    "ヤ列タ系省略推量形" -> "ヤ列タ系省略推量形",
-    "ヤ列タ系条件形" -> "ヤ列タ系条件形",
-    "ヤ列タ系連用タリ形" -> "ヤ列タ系連用タリ形",
-    "ダ列特殊連体形" -> "ダ列特殊連体形",
-    "ダ列特殊連用形" -> "ダ列特殊連用形",
-    "音便基本形" -> "音便基本形",
-    "音便推量形" -> "音便推量形",
-    "音便省略推量形" -> "音便省略推量形",
-    "文語条件形" -> "文語条件形",
-    "文語音便条件形" -> "文語音便条件形")
+    "ダ列タ系連用タリ形" -> "連",
+    "ダ列タ系連用ジャ形" -> "連ジャ",
+    "ダ列文語連体形" -> "文連",
+    "ダ列文語条件形" -> "文条",
+    "デアル列基本形" -> "基",
+    "デアル列命令形" -> "命",
+    "デアル列基本推量形" -> "推",
+    "デアル列基本省略推量形" -> "推r",
+    "デアル列基本条件形" -> "条",
+    "デアル列基本連用形" -> "連",
+    "デアル列タ形" -> "タ",
+    "デアル列タ系推量形" -> "タ推",
+    "デアル列タ系省略推量形" -> "タ略",
+    "デアル列タ系条件形" -> "タ条",
+    "デアル列タ系連用テ形" -> "タテ",
+    "デアル列タ系連用タリ形" -> "タリ",
+    "デス列基本形" -> "基",
+    "デス列音便基本形" -> "基b",
+    "デス列基本推量形" -> "推",
+    "デス列音便基本推量形" -> "推b",
+    "デス列基本省略推量形" -> "推r",
+    "デス列音便基本省略推量形" -> "推br",
+    "デス列タ形" -> "タ",
+    "デス列タ系推量形" -> "タ推",
+    "デス列タ系省略推量形" -> "タ推r",
+    "デス列タ系条件形" -> "タ条",
+    "デス列タ系連用テ形" -> "タテ",
+    "デス列タ系連用タリ形" -> "タリ",
+    "ヤ列基本形" -> "基",
+    "ヤ列基本推量形" -> "推",
+    "ヤ列基本省略推量形" -> "推r",
+    "ヤ列タ形" -> "タ",
+    "ヤ列タ系推量形" -> "タ推",
+    "ヤ列タ系省略推量形" -> "タ推",
+    "ヤ列タ系条件形" -> "タ条",
+    "ヤ列タ系連用タリ形" -> "タリ",
+    "ダ列特殊連体形" -> "特連",
+    "ダ列特殊連用形" -> "特連",
+    "音便基本形" -> "基b",
+    "音便推量形" -> "推r",
+    "音便省略推量形" -> "推br",
+    "文語条件形" -> "文条",
+    "文語音便条件形" -> "文条b"
+  )
 }

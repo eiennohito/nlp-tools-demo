@@ -5,9 +5,9 @@ import org.joda.time.DateTime
 import play.api.Configuration
 import play.api.inject.ApplicationLifecycle
 import reactivemongo.api.collections.bson.BSONCollection
-import reactivemongo.api.commands.WriteResult
+import reactivemongo.api.commands.{GetLastError, UpdateWriteResult, WriteResult}
 import reactivemongo.api.{DefaultDB, MongoConnection, MongoDriver}
-import reactivemongo.bson.{BSONDateTime, BSONDouble, BSONHandler, BSONObjectID, Macros}
+import reactivemongo.bson.{BSONDateTime, BSONDocument, BSONDouble, BSONHandler, BSONObjectID, Macros}
 import ws.kotonoha.akane.analyzers.juman.{JumanOption, JumanPos}
 import ws.kotonoha.akane.analyzers.jumanpp.wire.{Lattice, LatticeNode}
 
@@ -85,6 +85,26 @@ class MongoWorker(db: DefaultDB)(implicit ec: ExecutionContext) {
   private val coll = db.collection[BSONCollection]("analysis")
 
   import MongoObjects._
+
+  def updateReport(id: String, ids: Seq[Int]): Future[UpdateWriteResult] = {
+    val oid = BSONObjectID.apply(id)
+
+    val selector = BSONDocument("_id" -> oid)
+
+    val report = AnalysisReport(ids)
+
+    coll.update(
+      selector,
+      BSONDocument(
+        "$set" -> BSONDocument(
+          "reported" -> reportHandler.write(report)
+        )
+      ),
+      writeConcern = GetLastError.Acknowledged,
+      upsert = false,
+      multi = false
+    )
+  }
 
   def save(analysis: JppAnalysis): Future[WriteResult] = {
     coll.insert(analysis)

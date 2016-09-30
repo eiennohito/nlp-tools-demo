@@ -1,18 +1,29 @@
 package controllers
 
-import java.util.concurrent.Callable
+import java.util.concurrent.{Callable, TimeUnit}
 
 import code._
 import com.google.common.cache.CacheBuilder
 import com.google.inject.Inject
 import com.typesafe.scalalogging.StrictLogging
 import org.joda.time.{DateTime, DateTimeZone}
+import play.api.libs.json.Json
 import play.api.mvc._
 import reactivemongo.bson.BSONObjectID
-import ws.kotonoha.akane.analyzers.jumanpp.wire.{Lattice, LatticeNode}
+import ws.kotonoha.akane.analyzers.jumanpp.wire.Lattice
 import ws.kotonoha.akane.parser.JumanPosSet
 
 import scala.concurrent.{ExecutionContext, Future}
+
+
+case class ReportForAnalyze(
+  id: String,
+  ids: Seq[Int]
+)
+
+object ReportForAnalyze {
+  implicit val format = Json.format[ReportForAnalyze]
+}
 
 /**
   * @author eiennohito
@@ -22,17 +33,10 @@ class Jumanpp @Inject() (
   jc: JumanppCache,
   mwork: MongoWorker
 )(implicit ec: ExecutionContext) extends Controller with StrictLogging {
-  def lattice() = Action.async { req =>
-    val graph = req.getQueryString("text") match {
-      case None => Future.successful("")
-      case Some(sent) => jc.get(sent.take(512)).map(LatticeFormatter.formatLatticeAsGraph)
-    }
-    graph.map(gs => Ok(views.html.lattice(req.getQueryString("text").getOrElse(""), gs)))
-  }
 
-  def lattice2() = Action { req =>
+  def lattice() = Action { req =>
     val query = req.getQueryString("text").getOrElse("")
-    Ok(views.html.lattice2(query, jc.version))
+    Ok(views.html.lattice(query, jc.version, jc.dicVersion))
   }
 
   def log(id: BSONObjectID, l: Lattice, txt: String, req: Request[AnyContent], nanoStart: Long): Unit = {
@@ -40,7 +44,8 @@ class Jumanpp @Inject() (
     val ip = req.remoteAddress
     val ua = req.headers.get("User-Agent")
 
-    val anal = JppAnalysis(id,
+    val anal = JppAnalysis(
+      id,
       DateTime.now(DateTimeZone.UTC),
       txt,
       l,
@@ -102,43 +107,13 @@ class Jumanpp @Inject() (
         }
     }
   }
-}
 
-object LatticeFormatter {
-  def formatLatticeAsGraph(l: Lattice): String = {
-    val byId = l.nodes.map(n => n.nodeId -> n).toMap
-
-    val bldr = new StringBuilder
-    bldr.append("graph LR;\n")
-    for (n <- l.nodes) {
-      val nranks = ranks(n)
-      for (prev <- n.prevNodes) {
-        val pn = byId.get(prev)
-        val prevRanks = pn.map(n => ranks(n)).getOrElse(Array.emptyIntArray)
-        val sameRanks = prevRanks.intersect(nranks)
-        bldr.append(s"N$prev -${formatRanks(sameRanks)}-> N${n.nodeId}").append(";\n")
-      }
-      bldr.append(s"""N${n.nodeId}["${n.surface}"];""").append("\n")
-      bldr.append(s"class N${n.nodeId} simple;\n")
-    }
-    bldr.append("N0(BOS);\n")
-    bldr.append("class N0 simple;\n")
-    bldr.result()
-  }
-
-  private def formatRanks(common: Array[Int]): String = {
-    if (common.isEmpty) ""
-    else common.mkString("|", ",", "|")
-  }
-
-  private def ranks(pn: LatticeNode) = {
-    pn.features
-      .find(_.key == "ランク")
-      .flatMap(_.value)
-      .map(_.split(",").map(_.toInt))
-      .getOrElse(Array.emptyIntArray)
+  def report() = Action.async(parse.json[ReportForAnalyze]) { req =>
+    val obj = req.body
+    mwork.updateReport(obj.id, obj.ids).map { _ => Ok("Ok") }
   }
 }
+
 
 class JumanppCache @Inject() (
   jpp: JumanppService
@@ -146,7 +121,10 @@ class JumanppCache @Inject() (
   def dicVersion: String = jpp.dicVersion
   def version: String = jpp.version
 
-  private val cache = CacheBuilder.newBuilder().maximumSize(10000).build[String, Future[Lattice]]()
+  private val cache = CacheBuilder.newBuilder()
+    .maximumSize(10000)
+    .expireAfterWrite(1, TimeUnit.DAYS)
+    .build[String, Future[Lattice]]()
 
   def get(s: String): Future[Lattice] = {
     cache.get(s, new Callable[Future[Lattice]] {

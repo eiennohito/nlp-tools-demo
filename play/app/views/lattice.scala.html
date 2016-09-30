@@ -1,26 +1,114 @@
-@(query: String, graph: String)
+@(query: String, version: String, dicVersion: String)
 <!doctype html>
 <html>
   <head>
     <title>Juman++: @query</title>
-    <script src="@routes.Assets.at("javascripts/mermaid.js")"></script>
-    <script>mermaid.initialize({startOnLoad:true});</script>
+    @scalajs.html.scripts(
+      "scalajsclient",
+      name => routes.Assets.at(name).toString,
+      name => getClass.getResource(s"/public/$name") != null)
+    <script src="@routes.Assets.at("javascripts/jquery.tipsy.js")"></script>
     <link rel="stylesheet" href="@routes.Assets.at("stylesheets/main.css")">
+    <script>
+      "use strict";
+
+      function doRender() {
+        var content =  $("#data").val();
+        if (content.length > 0) {
+          var url = "@{routes.Jumanpp.lattice_parse()}";
+          GraphRenderer().render(url, content).then(function(g) {
+            console.log(g);
+            var svg = d3.select("#graph");
+            svg.select('g').remove();
+            var inner = svg.append("g");
+
+            var render = new dagreD3.render();
+            render(inner, g);
+
+            inner.attr("transform", "translate(0, 30)");
+            svg.attr("height", g.graph().height + 60);
+            svg.attr("width", g.graph().width);
+
+            inner.selectAll('g.node')
+                .each(function (v) {
+                  $(this).tipsy({
+                    opacity: 0.8, html: true, gravity: 's',
+                    title: function() { return g.node(v).tooltip; }
+                  })
+                });
+
+            var $top = $("#top-dom");
+            $top.removeClass('reporting');
+
+            var topDom = GraphRenderer().objReprFor(1);
+            var detailed = false;
+            var btn = $(topDom).find("button.report-btn");
+            btn.on('click', function() {
+              var reportUri = "@routes.Jumanpp.report()";
+              if (detailed) {
+                $.ajax(reportUri, {
+                  method: "POST",
+                  data: JSON.stringify({
+                    id: GraphRenderer().latticeId(),
+                    ids: GraphRenderer().markedIds()
+                  }),
+                  contentType: "application/json",
+                  processData: false
+                }).then(function () {
+                  $(".report-line").remove();
+                })
+              } else {
+                detailed = true;
+                $("#top-dom").addClass('reporting');
+                $.ajax(reportUri, {
+                  method: "POST",
+                  data: JSON.stringify({id: GraphRenderer().latticeId(), ids: []}),
+                  contentType: "application/json",
+                  processData: false
+                })
+              }
+            });
+            $top.empty().append(topDom);
+          });
+        }
+      }
+
+      $("#send").on('click', function (e) {
+        doRender();
+        return false;
+      });
+
+      $(document).ready(function () {
+        doRender();
+      });
+
+    </script>
   </head>
   <body>
     <h2>Juman++ Demo</h2>
     <div>
       <div class="sentence-input">
-        <form action="@routes.Jumanpp.lattice()" method="GET">
-          <input class="input-sentence" name="text" type="text" value="@query">
-          <input class="button" type="submit" title="Analyze">
+        <form>
+          <input id="data" class="input-sentence" name="text" type="text" value="@query">
+          <input id="send" class="button" type="submit" title="Analyze">
         </form>
       </div>
       <div>
-        <div class="mermaid lattice">
-          @graph
+        <div class="result">
+          <div class="top">
+            <pre id="top1"></pre>
+          </div>
+          <div id="top-dom" class="juman-format">
+
+          </div>
+        </div>
+        <div class="lattice" style="width: 100%; overflow: auto">
+          <svg id="graph" ></svg>
         </div>
       </div>
+    </div>
+    <div>
+      Using: @version / 辞書: @dicVersion
     </div>
   </body>
 </html>
