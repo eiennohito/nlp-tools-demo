@@ -2,6 +2,7 @@ import code.{JumanppLattice, JumanppLatticeNode, NodeScores}
 
 import scala.collection.generic.CanBuildFrom
 import scala.scalajs.js
+import scala.scalajs.js.URIUtils
 import scala.scalajs.js.annotation.JSExport
 
 
@@ -359,6 +360,17 @@ object GraphRenderer {
     js.Array(ids.toArray.sorted: _*)
   }
 
+  def makeTwitterUrl(foranalyze: String): String = {
+    val header = "#jumanpp "
+    val loc = org.scalajs.dom.window.location
+    val host = s"${loc.origin}${loc.pathname}"
+    val input = foranalyze.take(140 - header.length - 20)
+    val base = "https://twitter.com/intent/tweet"
+    val myurl = s"$host?text=${URIUtils.encodeURIComponent(foranalyze)}"
+    val tweetText = s"$header$input"
+    s"$base?text=${URIUtils.encodeURIComponent(tweetText)}&url=${URIUtils.encodeURIComponent(myurl)}"
+  }
+
   def objRepr(l: JumanppLattice, rank: Int) = {
     val nodes = l.nodes.filter(_.rank.contains(rank))
     import scalatags.JsDom.all._
@@ -416,6 +428,12 @@ object GraphRenderer {
         button(
           cls := "report-btn",
           "解析誤りを報告する"
+        ),
+        a(
+          cls := "tweet-btn",
+          target := "_blank",
+          href := makeTwitterUrl(nodes.map(_.surface).mkString),
+          "Tweet"
         )
       )
     ).render

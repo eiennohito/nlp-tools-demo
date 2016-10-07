@@ -12,8 +12,11 @@ lazy val playserver = (project in file("play")).settings(
     "com.lihaoyi" %% "upickle" % "0.4.1",
     "org.reactivemongo" %% "reactivemongo" % "0.11.14"
   ),
-  pipelineStages in Assets := Seq(scalaJSPipeline)
-).enablePlugins(PlayScala).
+  pipelineStages in Assets := Seq(scalaJSPipeline),
+  maintainer in Linux := "Arseny Tolmachev <arseny@nlp.ist.i.kyoto-u.ac.jp>",
+  packageSummary in Linux := "NLP tools demo app",
+  packageDescription := "NLP tools demo app"
+).enablePlugins(PlayScala, DebianPlugin).
   aggregate(clients.map(projectToRef): _*).
   dependsOn(sharedJvm, `akane-knp-akka`)
 
