@@ -360,13 +360,24 @@ object GraphRenderer {
     js.Array(ids.toArray.sorted: _*)
   }
 
-  def makeTwitterUrl(foranalyze: String): String = {
+  def makeTwitterUrl(foranalyze: Seq[JumanppLatticeNode]): String = {
+    val bldr = new StringBuilder
+    var lastPos = -1
+    for (n <- foranalyze) {
+      if (lastPos != n.startIdx) {
+        bldr.append(n.surface)
+      }
+      lastPos = n.startIdx
+    }
+
+    val rawString = bldr.result()
+
     val header = "#jumanpp "
     val loc = org.scalajs.dom.window.location
     val host = s"${loc.origin}${loc.pathname}"
-    val input = foranalyze.take(140 - header.length - 20)
+    val input = rawString.take(140 - header.length - 20)
     val base = "https://twitter.com/intent/tweet"
-    val myurl = s"$host?text=${URIUtils.encodeURIComponent(foranalyze)}"
+    val myurl = s"$host?text=${URIUtils.encodeURIComponent(rawString)}"
     val tweetText = s"$header$input"
     s"$base?text=${URIUtils.encodeURIComponent(tweetText)}&url=${URIUtils.encodeURIComponent(myurl)}"
   }
@@ -432,7 +443,7 @@ object GraphRenderer {
         a(
           cls := "tweet-btn",
           target := "_blank",
-          href := makeTwitterUrl(nodes.map(_.surface).mkString),
+          href := makeTwitterUrl(nodes),
           "Tweet"
         )
       )
