@@ -1,3 +1,4 @@
+import com.typesafe.sbt.packager.archetypes.ServerLoader
 import sbt.Project.projectToRef
 
 lazy val clients = Seq(scalajsclient)
@@ -14,8 +15,11 @@ lazy val playserver = (project in file("play")).settings(
   ),
   pipelineStages in Assets := Seq(scalaJSPipeline),
   maintainer in Linux := "Arseny Tolmachev <arseny@nlp.ist.i.kyoto-u.ac.jp>",
+  name in Linux := "nlp-tools-demo",
+  packageName in Linux := (name in Linux).value,
   packageSummary in Linux := "NLP tools demo app",
-  packageDescription := "NLP tools demo app"
+  packageDescription := "NLP tools demo app",
+  serverLoading in Debian := ServerLoader.Systemd
 ).enablePlugins(PlayScala, DebianPlugin).
   aggregate(clients.map(projectToRef): _*).
   dependsOn(sharedJvm, `akane-knp-akka`)
