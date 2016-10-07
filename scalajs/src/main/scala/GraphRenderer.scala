@@ -411,11 +411,11 @@ object GraphRenderer {
         cls := "report-line",
         span(
           cls := "report-visible",
-          "間違った形態素を選択してください"
+          "解析を誤っている形態素を選択してください"
         ),
         button(
           cls := "report-btn",
-          "解析誤りの報告"
+          "解析誤りを報告する"
         )
       )
     ).render

@@ -56,10 +56,11 @@
                   processData: false
                 }).then(function () {
                   $(".report-line").remove();
-                })
+                });
               } else {
                 detailed = true;
                 $("#top-dom").addClass('reporting');
+                btn.text("送信");
                 $.ajax(reportUri, {
                   method: "POST",
                   data: JSON.stringify({id: GraphRenderer().latticeId(), ids: []}),
@@ -103,6 +104,11 @@
           </div>
         </div>
         <div class="lattice" style="width: 100%; overflow: auto">
+          <h3>ラティス表示</h3>
+          <p>
+            ボックスの数字は解析候補のランクを示しています。
+            赤いパスは最もスコアの高いパスです。
+          </p>
           <svg id="graph" ></svg>
         </div>
       </div>
