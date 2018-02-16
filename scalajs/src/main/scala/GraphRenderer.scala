@@ -1,12 +1,16 @@
 import code.{JumanppLattice, JumanppLatticeNode, NodeScores}
+import org.scalajs.dom.ext.Ajax
+import org.scalajs.dom.raw.XMLHttpRequest
 
 import scala.collection.generic.CanBuildFrom
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.scalajs.js
 import scala.scalajs.js.URIUtils
-import scala.scalajs.js.annotation.JSExport
+import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
+import scala.util.{Failure, Success}
 
 
-@JSExport
+@JSExportTopLevel("GraphRenderer")
 object GraphRenderer {
 
   val BOSnode = JumanppLatticeNode(
@@ -18,11 +22,12 @@ object GraphRenderer {
     NodeScores(0, 0, 0)
   )
 
-  val jq = js.Dynamic.global.jQuery
-
   @JSExport
   def render(api: String, text: String) = {
-    analyzeText(api, text).`then`(handleResponse _)
+    import scala.scalajs.js.JSConverters._
+    analyzeText(api, text).map {
+      resp => handleResponse(resp)
+    }.toJSPromise
   }
 
   @JSExport
@@ -30,7 +35,7 @@ object GraphRenderer {
     val encoded = js.URIUtils.encodeURIComponent(text)
     val qurl = s"$api?text=$encoded"
 
-    jq.ajax(qurl, js.Dynamic.literal(method = "GET"))
+    Ajax.get(qurl)
   }
 
   def nid(n: JumanppLatticeNode) = s"N#${n.num}"
@@ -45,19 +50,19 @@ object GraphRenderer {
   var stored: JumanppLattice = null
   var marked: Map[Int, Boolean] = Map.empty
 
-  def handleResponse(resp: js.Any): js.Any = {
-    import upickle.default._
-    val data = read[JumanppLattice](resp.asInstanceOf[String])
-    stored = data
+  def handleResponse(resp: XMLHttpRequest): js.Any = {
+    import prickle._
+    val data = Unpickle[JumanppLattice].fromString(resp.responseText)
+    stored = data.get
     marked = Map.empty
     val graph = new DagreGraph().setGraph(GraphConfig())
-    val byId = data.nodes.map(n => n.num -> n).toMap
+    val byId = stored.nodes.map(n => n.num -> n).toMap
 
-    val totalSize = data.nodes.flatMap(_.rank).distinct.size
+    val totalSize = stored.nodes.flatMap(_.rank).distinct.size
 
     graph.setNode(nid(BOSnode), NodeConfig(0, label = "BOS", tooltip = "Begin of Sentence"))
 
-    for (n <- data.nodes) {
+    for (n <- stored.nodes) {
       val nodeClasses = n.rank.map(r => s"rank-$r").mkString("simple ", " ", "")
       graph.setNode(nid(n),
         NodeConfig(
@@ -194,7 +199,7 @@ object GraphRenderer {
 
     div(
       `class` := "ranks",
-     if (common.length == totalSize) "*" else compressSeq(common.toIndexedSeq)
+     if (common.lengthCompare(totalSize) == 0) "*" else compressSeq(common.toIndexedSeq)
     ).render
   }
 

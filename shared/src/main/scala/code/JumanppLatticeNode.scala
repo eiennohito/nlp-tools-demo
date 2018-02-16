@@ -46,5 +46,5 @@ case class AnalysisResult(
   lattice: JumanppLattice,
   version: String,
   dicVersion: String,
-  fixes: Option[Seq[Int]]
+  fixes: Seq[Int]
 )

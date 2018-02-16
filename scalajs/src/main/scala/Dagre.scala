@@ -1,5 +1,5 @@
 import scala.scalajs.js
-import scala.scalajs.js.annotation.JSName
+import scala.scalajs.js.annotation.{JSGlobal, JSName}
 
 /**
   * @author eiennohito
@@ -53,7 +53,7 @@ object EdgeConfig {
 }
 
 @js.native
-@JSName("dagreD3.graphlib.Graph")
+@JSGlobal("dagreD3.graphlib.Graph")
 class DagreGraph extends js.Object {
   def setGraph(graphConfig: GraphConfig): DagreGraph = js.native
 
@@ -63,7 +63,7 @@ class DagreGraph extends js.Object {
 }
 
 @js.native
-@JSName("dagreD3")
+@JSGlobal("dagreD3")
 object DagreD3 extends js.Object {
   def render(): js.Dynamic = js.native
 }

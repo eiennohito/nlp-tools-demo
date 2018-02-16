@@ -1,33 +1,31 @@
 import code.AnalysisResult
-import japgolly.scalajs.react.{BackendScope, Callback, ReactComponentB, ReactDOM}
-
-import scala.scalajs.js
-import scala.scalajs.js.annotation.JSExport
-import japgolly.scalajs.react.vdom.prefix_<^._
+import japgolly.scalajs.react._
+import japgolly.scalajs.react.vdom.html_<^._
 import org.scalajs.dom
 
-import scala.concurrent.{Future, Promise}
-
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.{Future, Promise}
+import scala.scalajs.js
+import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 
 /**
   * @author eiennohito
   * @since 2016/09/30
   */
-@JSExport
+@JSExportTopLevel("JppAdmin")
 object JppAdmin {
 
   @JSExport
-  def init(node: dom.Node, uri: String) = {
+  def init(node: dom.Element, uri: String) = {
     val cmpts = new AdminComponents(uri)
-    ReactDOM.render(cmpts.Main(), node)
+    cmpts.Main().renderIntoDOM(node)
   }
 }
 
 case class AdminState()
 
 class AdminBackend($: BackendScope[Unit, AdminState], ac: AdminComponents) {
-  def render(s: AdminState) = {
+  def render(s: AdminState): VdomElement = {
     <.div(
       ac.SentenceList()
     )
@@ -42,21 +40,21 @@ case class PageState (
 )
 
 class ListBackend($: BackendScope[Unit, PageState], ac: AdminComponents) {
-  def init() = Callback.future {
-    val state = $.getInitialState()
-
-    ac.items(state.start, state.fixed, state.sorting).map { res =>
-      $.modState(_.copy(items = res))
+  def init(): Callback = $.state.flatMap { state =>
+    Callback.future {
+      ac.items(state.start, state.fixed, state.sorting).map { res =>
+        $.modState(_.copy(items = res))
+      }
     }
   }
 
-  def render(s: PageState) = {
+  def render(s: PageState): VdomElement = {
     <.table(
       itemTable(s.items)
     )
   }
 
-  def oneItem(i: AnalysisResult) = {
+  def oneItem(i: AnalysisResult): VdomElement = {
     <.tr(
       <.td(
         ^.cls := "date",
@@ -77,11 +75,11 @@ class ListBackend($: BackendScope[Unit, PageState], ac: AdminComponents) {
     )
   }
 
-  def itemTable(items: Seq[AnalysisResult]) = {
+  def itemTable(items: Seq[AnalysisResult]): VdomElement = {
     <.tbody(
       items.map { i =>
           oneItem(i)
-      }
+      }.toTagMod
     )
   }
 }
@@ -104,24 +102,24 @@ class AdminComponents(uri: String) { self =>
         contentType = "text/plain"
       )
     ).`then` ({ (o: String) =>
-      import upickle.default._
-      val data = read[Seq[AnalysisResult]](o)
-      p.success(data)
+      import prickle._
+      val data = Unpickle[Seq[AnalysisResult]].fromString(o)
+      p.complete(data)
     }, (o: js.Any) => p.failure(new Exception(o.toString)))
 
     p.future
   }
 
-  val Main = ReactComponentB[Unit]("Admin")
+  val Main = ScalaComponent.builder[Unit]("Admin")
     .initialState(AdminState())
     .backend(new AdminBackend(_, self))
     .renderBackend
     .build
 
-  val SentenceList = ReactComponentB[Unit]("SentenceList")
+  val SentenceList = ScalaComponent.builder[Unit]("SentenceList")
       .initialState(PageState(0, false, "date-", Nil))
       .backend(s => new ListBackend(s, self))
       .renderBackend
-      .componentDidMount(_.backend.init)
+      .componentDidMount(_.backend.init())
       .build
 }

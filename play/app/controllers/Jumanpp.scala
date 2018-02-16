@@ -1,6 +1,6 @@
 package controllers
 
-import java.util.concurrent.{Callable, TimeUnit}
+import java.util.concurrent.TimeUnit
 
 import code._
 import com.google.common.cache.CacheBuilder
@@ -32,7 +32,7 @@ object ReportForAnalyze {
 class Jumanpp @Inject() (
   jc: JumanppCache,
   mwork: MongoWorker
-)(implicit ec: ExecutionContext) extends Controller with StrictLogging {
+)(implicit ec: ExecutionContext) extends InjectedController with StrictLogging {
 
   def lattice() = Action { req =>
     val query = req.getQueryString("text").getOrElse("")
@@ -57,7 +57,7 @@ class Jumanpp @Inject() (
       None
     )
 
-    mwork.save(anal).onFailure {
+    mwork.save(anal).failed.foreach {
       case e: Exception => logger.warn(s"could not save analysis results for input: $txt", e)
     }
   }
@@ -73,7 +73,8 @@ class Jumanpp @Inject() (
         latF.foreach(l => log(id, l, txt, req, start))
         latF.map { l =>
           val transformed = JumanppConversion.convertLatttice(id, l)
-          val string = upickle.default.write(transformed)
+          import prickle._
+          val string = Pickle.intoString(transformed)
           Ok(string)
         }
     }
@@ -133,16 +134,14 @@ class JumanppCache @Inject() (
     .build[String, Future[Lattice]]()
 
   def get(s: String): Future[Lattice] = {
-    cache.get(s, new Callable[Future[Lattice]] {
-      override def call() = {
-        val item = jpp.analyze(s)
-        item.onFailure {
-          case e: Exception =>
-            logger.error(s"could not create value for $s", e)
-            cache.invalidate(s)
-        }
-        item
+    cache.get(s, () => {
+      val item = jpp.analyze(s)
+      item.failed.foreach {
+        case e: Exception =>
+          logger.error(s"could not create value for $s", e)
+          cache.invalidate(s)
       }
+      item
     })
   }
 }

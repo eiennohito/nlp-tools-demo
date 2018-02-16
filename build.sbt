@@ -1,17 +1,16 @@
-import com.typesafe.sbt.packager.archetypes.ServerLoader
 import sbt.Project.projectToRef
 
 lazy val clients = Seq(scalajsclient)
-lazy val scalaV = "2.11.8"
 
 lazy val playserver = (project in file("play")).settings(
-  scalaVersion := scalaV,
   scalaJSProjects := clients,
   libraryDependencies ++= Seq(
-    "com.vmunier" %% "scalajs-scripts" % "1.0.0",
-    "org.webjars" %% "webjars-play" % "2.5.0",
-    "com.lihaoyi" %% "upickle" % "0.4.1",
-    "org.reactivemongo" %% "reactivemongo" % "0.11.14"
+    "com.vmunier" %% "scalajs-scripts" % "1.1.1",
+    "org.webjars" %% "webjars-play" % "2.6.3",
+    "org.webjars" % "bootstrap" % "3.1.1-2",
+    "org.reactivemongo" %% "reactivemongo" % "0.12.7",
+    "net.codingwell" %% "scala-guice" % "4.1.1",
+    guice
   ),
   pipelineStages in Assets := Seq(scalaJSPipeline),
   maintainer in Linux := "Arseny Tolmachev <arseny@nlp.ist.i.kyoto-u.ac.jp>",
@@ -19,20 +18,18 @@ lazy val playserver = (project in file("play")).settings(
   packageName in Linux := (name in Linux).value,
   packageSummary in Linux := "NLP tools demo app",
   packageDescription := "NLP tools demo app",
-  serverLoading in Debian := ServerLoader.Systemd
+  serverLoading in Debian := Some(ServerLoader.Systemd)
 ).enablePlugins(PlayScala, DebianPlugin).
   aggregate(clients.map(projectToRef): _*).
   dependsOn(sharedJvm, `akane-knp-akka`)
 
 lazy val scalajsclient = (project in file("scalajs")).settings(
-  scalaVersion := scalaV,
-  persistLauncher := true,
-  persistLauncher in Test := false,
+  scalaJSUseMainModuleInitializer := true,
+  scalaJSUseMainModuleInitializer in Test := false,
   libraryDependencies ++= Seq(
-    "org.scala-js" %%% "scalajs-dom" % "0.9.1",
-    "com.lihaoyi" %%% "upickle" % "0.4.1",
-    "com.lihaoyi" %%% "scalatags" % "0.6.0",
-    "com.github.japgolly.scalajs-react" %%% "core" % "0.11.2"
+    "org.scala-js" %%% "scalajs-dom" % "0.9.4",
+    "com.lihaoyi" %%% "scalatags" % "0.6.7",
+    "com.github.japgolly.scalajs-react" %%% "core" % "1.1.1"
   ),
   jsDependencies ++= Seq(
     "org.webjars.npm" % "dagre-d3" % "0.4.17" / "dist/dagre-d3.js" minified "dist/dagre-d3.min.js",
@@ -58,18 +55,29 @@ lazy val scalajsclient = (project in file("scalajs")).settings(
 ).enablePlugins(ScalaJSPlugin, ScalaJSWeb).
   dependsOn(sharedJs)
 
-lazy val shared = (crossProject.crossType(CrossType.Pure) in file("shared")).
-  settings(scalaVersion := scalaV).
-  jsConfigure(_ enablePlugins ScalaJSWeb)
+import sbtcrossproject.{crossProject, CrossType}
+
+lazy val shared = crossProject(JSPlatform, JVMPlatform)
+  .withoutSuffixFor(JVMPlatform)
+  .crossType(CrossType.Pure)
+  .in(file("shared"))
+  .jsConfigure(_ enablePlugins ScalaJSWeb)
+  .settings(
+    libraryDependencies ++= Seq("com.github.benhutchison" %%% "prickle" % "1.1.13")
+  )
 
 lazy val sharedJvm = shared.jvm
 lazy val sharedJs = shared.js
 
 // loads the Play project at sbt startup
-onLoad in Global := (Command.process("project playserver", _: State)) compose (onLoad in Global).value
+// onLoad in Global := (Command.process("project playserver", _: State)) compose (onLoad in Global).value
 
-lazy val akane = (project in file("akane"))
-lazy val `akane-knp-akka` = (project in file("akane/knp-akka"))
+lazy val akane = project in file("akane")
 
+lazy val `akane-knp-akka` = project in file("akane/knp-akka")
 
 fork in run := true
+
+inThisBuild(
+  scalaVersion := "2.12.4"
+)

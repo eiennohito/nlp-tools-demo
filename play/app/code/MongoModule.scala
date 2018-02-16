@@ -4,10 +4,9 @@ import com.google.inject.{Binder, Module, Provides, Singleton}
 import org.joda.time.DateTime
 import play.api.Configuration
 import play.api.inject.ApplicationLifecycle
-import play.api.mvc.Result
 import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.api.commands.{GetLastError, UpdateWriteResult, WriteResult}
-import reactivemongo.api.{DefaultDB, MongoConnection, MongoDriver}
+import reactivemongo.api.{Cursor, DefaultDB, MongoConnection, MongoDriver}
 import reactivemongo.bson.{BSONDateTime, BSONDocument, BSONDouble, BSONHandler, BSONObjectID, Macros}
 import ws.kotonoha.akane.analyzers.juman.{JumanOption, JumanPos}
 import ws.kotonoha.akane.analyzers.jumanpp.wire.{Lattice, LatticeNode}
@@ -27,12 +26,10 @@ class MongoModule extends Module {
     conf: Configuration,
     app: ApplicationLifecycle
   )(implicit ec: ExecutionContext): MongoConnection = {
-    val driver = new MongoDriver(Some(conf.underlying))
-
+    val driver = new MongoDriver(Some(conf.underlying), Some(getClass.getClassLoader))
     app.addStopHook { () => Future{ driver.close() } }
-
-    val url = conf.getString("mongo.uri")
-    driver.connection(MongoConnection.parseURI(url.get).get)
+    val url = conf.get[String]("mongo.uri")
+    driver.connection(MongoConnection.parseURI(url).get)
   }
 
   @Provides
@@ -42,7 +39,7 @@ class MongoModule extends Module {
     cfg: Configuration
   ): MongoWorker = {
     import scala.concurrent.duration._
-    val dbname = cfg.getString("mongo.db").getOrElse("morph_demo")
+    val dbname = cfg.getOptional[String]("mongo.db").getOrElse("morph_demo")
     val db = Await.result(conn.database(dbname)(ec), 2.seconds)
     new MongoWorker(db)(ec)
   }
@@ -89,7 +86,7 @@ class MongoWorker(db: DefaultDB)(implicit ec: ExecutionContext) {
   import MongoObjects._
 
   def updateReport(id: String, ids: Seq[Int]): Future[UpdateWriteResult] = {
-    val oid = BSONObjectID.apply(id)
+    val oid = BSONObjectID.parse(id).get
 
     val selector = BSONDocument("_id" -> oid)
 
@@ -120,7 +117,6 @@ class MongoWorker(db: DefaultDB)(implicit ec: ExecutionContext) {
     ) else BSONDocument.empty
 
     val qo = coll.find(q).sort(sorting)
-    qo.options(qo.options.skip(from)).cursor[JppAnalysis]().collect[Seq](limit)
+    qo.options(qo.options.skip(from)).cursor[JppAnalysis]().collect(limit, Cursor.FailOnError[Seq[JppAnalysis]]())
   }
-
 }

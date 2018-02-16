@@ -4,7 +4,7 @@ import javax.inject.Inject
 
 import code.{AnalysisResult, MongoWorker}
 import org.joda.time.format.DateTimeFormat
-import play.api.mvc.{Action, Controller}
+import play.api.mvc.InjectedController
 import reactivemongo.bson.BSONDocument
 import ws.kotonoha.akane.utils.XInt
 
@@ -16,7 +16,7 @@ import scala.concurrent.ExecutionContext
   */
 class JumanppAdmin @Inject() (
   mw: MongoWorker
-)(implicit ec: ExecutionContext) extends Controller {
+)(implicit ec: ExecutionContext) extends InjectedController {
 
   def stats() = Action { Ok(views.html.jppadmin()) }
 
@@ -38,10 +38,11 @@ class JumanppAdmin @Inject() (
           JumanppConversion.convertLatttice(a._id, a.analysis),
           a.version,
           a.dicVersion,
-          a.reported.map(_.nodes)
+          a.reported.map(_.nodes).getOrElse(Seq.empty)
         )
       }
-      val string = upickle.default.write(data)
+      import prickle._
+      val string = Pickle.intoString(data)
       Ok(string)
     }
   }
