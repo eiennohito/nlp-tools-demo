@@ -24,7 +24,7 @@ object JppAdmin {
 
 case class AdminState()
 
-class AdminBackend($: BackendScope[Unit, AdminState], ac: AdminComponents) {
+class AdminBackend($ : BackendScope[Unit, AdminState], ac: AdminComponents) {
   def render(s: AdminState): VdomElement = {
     <.div(
       ac.SentenceList()
@@ -32,14 +32,14 @@ class AdminBackend($: BackendScope[Unit, AdminState], ac: AdminComponents) {
   }
 }
 
-case class PageState (
-  start: Int,
-  fixed: Boolean,
-  sorting: String,
-  items: Seq[AnalysisResult]
+case class PageState(
+    start: Int,
+    fixed: Boolean,
+    sorting: String,
+    items: Seq[AnalysisResult]
 )
 
-class ListBackend($: BackendScope[Unit, PageState], ac: AdminComponents) {
+class ListBackend($ : BackendScope[Unit, PageState], ac: AdminComponents) {
   def init(): Callback = $.state.flatMap { state =>
     Callback.future {
       ac.items(state.start, state.fixed, state.sorting).map { res =>
@@ -78,7 +78,7 @@ class ListBackend($: BackendScope[Unit, PageState], ac: AdminComponents) {
   def itemTable(items: Seq[AnalysisResult]): VdomElement = {
     <.tbody(
       items.map { i =>
-          oneItem(i)
+        oneItem(i)
       }.toTagMod
     )
   }
@@ -91,35 +91,38 @@ class AdminComponents(uri: String) { self =>
     val p = Promise[Seq[AnalysisResult]]()
 
     jq.ajax(
-      js.Dynamic.literal(
-        url = uri,
-        method = "GET",
-        data = js.Dynamic.literal(
-          from = from,
-          fixed = fixed,
-          sorting = sorting
-        ),
-        contentType = "text/plain"
+        js.Dynamic.literal(
+          url = uri,
+          method = "GET",
+          data = js.Dynamic.literal(
+            from = from,
+            fixed = fixed,
+            sorting = sorting
+          ),
+          contentType = "text/plain"
+        )
       )
-    ).`then` ({ (o: String) =>
-      import prickle._
-      val data = Unpickle[Seq[AnalysisResult]].fromString(o)
-      p.complete(data)
-    }, (o: js.Any) => p.failure(new Exception(o.toString)))
+      .`then`({ (o: String) =>
+        import prickle._
+        val data = Unpickle[Seq[AnalysisResult]].fromString(o)
+        p.complete(data)
+      }, (o: js.Any) => p.failure(new Exception(o.toString)))
 
     p.future
   }
 
-  val Main = ScalaComponent.builder[Unit]("Admin")
+  val Main = ScalaComponent
+    .builder[Unit]("Admin")
     .initialState(AdminState())
     .backend(new AdminBackend(_, self))
     .renderBackend
     .build
 
-  val SentenceList = ScalaComponent.builder[Unit]("SentenceList")
-      .initialState(PageState(0, false, "date-", Nil))
-      .backend(s => new ListBackend(s, self))
-      .renderBackend
-      .componentDidMount(_.backend.init())
-      .build
+  val SentenceList = ScalaComponent
+    .builder[Unit]("SentenceList")
+    .initialState(PageState(0, false, "date-", Nil))
+    .backend(s => new ListBackend(s, self))
+    .renderBackend
+    .componentDidMount(_.backend.init())
+    .build
 }

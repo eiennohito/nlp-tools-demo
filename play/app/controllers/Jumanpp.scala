@@ -15,10 +15,9 @@ import ws.kotonoha.akane.parser.JumanPosSet
 
 import scala.concurrent.{ExecutionContext, Future}
 
-
 case class ReportForAnalyze(
-  id: String,
-  ids: Seq[Int]
+    id: String,
+    ids: Seq[Int]
 )
 
 object ReportForAnalyze {
@@ -29,17 +28,24 @@ object ReportForAnalyze {
   * @author eiennohito
   * @since 2016/09/28
   */
-class Jumanpp @Inject() (
-  jc: JumanppCache,
-  mwork: MongoWorker
-)(implicit ec: ExecutionContext) extends InjectedController with StrictLogging {
+class Jumanpp @Inject()(
+    jc: JumanppCache,
+    mwork: MongoWorker
+)(implicit ec: ExecutionContext)
+    extends InjectedController
+    with StrictLogging {
 
   def lattice() = Action { req =>
     val query = req.getQueryString("text").getOrElse("")
     Ok(views.html.lattice(query, jc.version, jc.dicVersion))
   }
 
-  def log(id: BSONObjectID, l: Lattice, txt: String, req: Request[AnyContent], nanoStart: Long): Unit = {
+  def log(
+      id: BSONObjectID,
+      l: Lattice,
+      txt: String,
+      req: Request[AnyContent],
+      nanoStart: Long): Unit = {
     val millis = (System.nanoTime() - nanoStart) * 1e-6
     val ip = req.headers.get("X-Real-IP").getOrElse(req.remoteAddress)
     val ua = req.headers.get("User-Agent")
@@ -82,7 +88,9 @@ class Jumanpp @Inject() (
 
   def report() = Action.async(parse.json[ReportForAnalyze]) { req =>
     val obj = req.body
-    mwork.updateReport(obj.id, obj.ids).map { _ => Ok("Ok") }
+    mwork.updateReport(obj.id, obj.ids).map { _ =>
+      Ok("Ok")
+    }
   }
 }
 
@@ -98,7 +106,9 @@ object JumanppConversion {
         val subpos = pos.subtypes(po.subpos)
         val ctype = posset.conjugatons(po.category)
         val conj = ctype.conjugations(po.conjugation)
-        val features = n.features.map {jo => JumanppFeature(jo.key, jo.value)}
+        val features = n.features.map { jo =>
+          JumanppFeature(jo.key, jo.value)
+        }
         JumanppLatticeNode(
           n.nodeId,
           n.startIndex,
@@ -106,8 +116,14 @@ object JumanppConversion {
           n.canonic,
           n.reading,
           n.midasi,
-          pos.name, subpos.name, ctype.name, conj.name,
-          po.pos, po.subpos, po.category, po.conjugation,
+          pos.name,
+          subpos.name,
+          ctype.name,
+          conj.name,
+          po.pos,
+          po.subpos,
+          po.category,
+          po.conjugation,
           n.prevNodes,
           n.rank,
           features,
@@ -117,18 +133,21 @@ object JumanppConversion {
             n.morphAnalysisScore
           )
         )
-      }, l.comment.getOrElse(""))
+      },
+      l.comment.getOrElse("")
+    )
   }
 }
 
-
-class JumanppCache @Inject() (
-  jpp: JumanppService
-)(implicit ec: ExecutionContext) extends StrictLogging {
+class JumanppCache @Inject()(
+    jpp: JumanppService
+)(implicit ec: ExecutionContext)
+    extends StrictLogging {
   def dicVersion: String = jpp.dicVersion
   def version: String = jpp.version
 
-  private val cache = CacheBuilder.newBuilder()
+  private val cache = CacheBuilder
+    .newBuilder()
     .maximumSize(10000)
     .expireAfterWrite(1, TimeUnit.DAYS)
     .build[String, Future[Lattice]]()

@@ -47,18 +47,21 @@ trait JumanppService {
     val query = JumanppActor.AnalyzeRequest(Nil, data)
     actor.ask(query).map {
       case JumanppActor.AnalysisSuccess(_, res) => res
-      case JumanppActor.AnalysisFailure(_, t) => throw t
+      case JumanppActor.AnalysisFailure(_, t)   => throw t
     }
   }
 }
 
-class JumanppServiceImpl(val version: String, val dicVersion: String, val actor: ActorRef) extends JumanppService
+class JumanppServiceImpl(val version: String, val dicVersion: String, val actor: ActorRef)
+    extends JumanppService
 
 class JumanppServiceFactory(
-  cfg: Config,
-  sched: Scheduler,
-  afact: ActorRefFactory
-)(implicit ec: ExecutionContext) extends JumanppService with StrictLogging {
+    cfg: Config,
+    sched: Scheduler,
+    afact: ActorRefFactory
+)(implicit ec: ExecutionContext)
+    extends JumanppService
+    with StrictLogging {
 
   private val jppConfig = JumanppConfig(cfg)
 
@@ -99,26 +102,28 @@ class JumanppServiceFactory(
   }
 
   private def getDicVersion(c: JumanppConfig): Option[String] = {
-    c.resources.orElse {
-      try {
-        val path = Paths.get(System.getProperty("user.home"), ".jumanpprc")
-        val lines = Files.readAllLines(path, Charsets.utf8)
-        Some(lines.get(0))
-      } catch {
-        case e: Exception => None
+    c.resources
+      .orElse {
+        try {
+          val path = Paths.get(System.getProperty("user.home"), ".jumanpprc")
+          val lines = Files.readAllLines(path, Charsets.utf8)
+          Some(lines.get(0))
+        } catch {
+          case e: Exception => None
+        }
       }
-    }.flatMap { r =>
-      try {
-        val path = Paths.get(r, "version")
-        if (Files.exists(path)) {
-          Some(Files.readAllLines(path, Charsets.utf8).get(0))
-        } else None
-      } catch {
-        case e: Exception =>
-          logger.warn(s"could not extract version from config $c", e)
-          None
+      .flatMap { r =>
+        try {
+          val path = Paths.get(r, "version")
+          if (Files.exists(path)) {
+            Some(Files.readAllLines(path, Charsets.utf8).get(0))
+          } else None
+        } catch {
+          case e: Exception =>
+            logger.warn(s"could not extract version from config $c", e)
+            None
+        }
       }
-    }
   }
 
   private def makeInstance() = {
@@ -134,7 +139,6 @@ class JumanppServiceFactory(
         Future.failed(new Exception("could not get version of juman++"))
     }
   }
-
 
   override def dicVersion: String = Await.result(internal.map(_.dicVersion), 10.seconds)
   override def actor: ActorRef = Await.result(internal.map(_.actor), 10.seconds)
@@ -180,7 +184,8 @@ class TokenBasedParent(child: Props, number: Int, maxProcessTime: FiniteDuration
   case object CleanBuffers
 
   override def preStart(): Unit = {
-    context.system.scheduler.schedule(maxProcessTime, maxProcessTime, self, CleanBuffers)(context.dispatcher)
+    context.system.scheduler.schedule(maxProcessTime, maxProcessTime, self, CleanBuffers)(
+      context.dispatcher)
   }
 
   def trySendBuffer() = {
@@ -207,7 +212,9 @@ class TokenBasedParent(child: Props, number: Int, maxProcessTime: FiniteDuration
   }
 
   def cleanBuffers() = {
-    val (good, stale) = avalable.partition { case (_, t) => DateTime.now().minusHours(1).isBefore(t)}
+    val (good, stale) = avalable.partition {
+      case (_, t) => DateTime.now().minusHours(1).isBefore(t)
+    }
     avalable = good
     stale.foreach {
       case (a, _) => a ! PoisonPill

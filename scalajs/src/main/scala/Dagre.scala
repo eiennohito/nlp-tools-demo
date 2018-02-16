@@ -12,9 +12,12 @@ trait GraphConfig extends js.Object {
 }
 
 object GraphConfig {
-  def apply(): GraphConfig = js.Dynamic.literal(
-    rankdir = "lr"
-  ).asInstanceOf[GraphConfig]
+  def apply(): GraphConfig =
+    js.Dynamic
+      .literal(
+        rankdir = "lr"
+      )
+      .asInstanceOf[GraphConfig]
 }
 
 @js.native
@@ -22,18 +25,21 @@ trait NodeConfig extends js.Object {}
 
 object NodeConfig {
   def apply(
-    id: Int,
-    label: js.Any = "",
-    cls: String = "simple",
-    tooltip: js.Any = ""
-  ): NodeConfig = js.Dynamic.literal(
-    id = s"node-$id",
-    label = label,
-    labelType = "html",
-    `class` = cls,
-    padding = 0,
-    tooltip = tooltip
-  ).asInstanceOf[NodeConfig]
+      id: Int,
+      label: js.Any = "",
+      cls: String = "simple",
+      tooltip: js.Any = ""
+  ): NodeConfig =
+    js.Dynamic
+      .literal(
+        id = s"node-$id",
+        label = label,
+        labelType = "html",
+        `class` = cls,
+        padding = 0,
+        tooltip = tooltip
+      )
+      .asInstanceOf[NodeConfig]
 }
 
 @js.native
@@ -43,13 +49,16 @@ trait EdgeConfig extends js.Object {
 
 object EdgeConfig {
   def apply(
-    label: js.Any,
-    cls: String = ""
-  ): EdgeConfig = js.Dynamic.literal(
-    label = label,
-    labelType = "html",
-    `class` = cls
-  ).asInstanceOf[EdgeConfig]
+      label: js.Any,
+      cls: String = ""
+  ): EdgeConfig =
+    js.Dynamic
+      .literal(
+        label = label,
+        labelType = "html",
+        `class` = cls
+      )
+      .asInstanceOf[EdgeConfig]
 }
 
 @js.native
@@ -67,4 +76,3 @@ class DagreGraph extends js.Object {
 object DagreD3 extends js.Object {
   def render(): js.Dynamic = js.native
 }
-

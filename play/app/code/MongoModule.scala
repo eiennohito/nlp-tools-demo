@@ -7,7 +7,14 @@ import play.api.inject.ApplicationLifecycle
 import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.api.commands.{GetLastError, UpdateWriteResult, WriteResult}
 import reactivemongo.api.{Cursor, DefaultDB, MongoConnection, MongoDriver}
-import reactivemongo.bson.{BSONDateTime, BSONDocument, BSONDouble, BSONHandler, BSONObjectID, Macros}
+import reactivemongo.bson.{
+  BSONDateTime,
+  BSONDocument,
+  BSONDouble,
+  BSONHandler,
+  BSONObjectID,
+  Macros
+}
 import ws.kotonoha.akane.analyzers.juman.{JumanOption, JumanPos}
 import ws.kotonoha.akane.analyzers.jumanpp.wire.{Lattice, LatticeNode}
 
@@ -23,20 +30,22 @@ class MongoModule extends Module {
   @Provides
   @Singleton
   def mongo(
-    conf: Configuration,
-    app: ApplicationLifecycle
+      conf: Configuration,
+      app: ApplicationLifecycle
   )(implicit ec: ExecutionContext): MongoConnection = {
     val driver = new MongoDriver(Some(conf.underlying), Some(getClass.getClassLoader))
-    app.addStopHook { () => Future{ driver.close() } }
+    app.addStopHook { () =>
+      Future { driver.close() }
+    }
     val url = conf.get[String]("mongo.uri")
     driver.connection(MongoConnection.parseURI(url).get)
   }
 
   @Provides
   def worker(
-    conn: MongoConnection,
-    ec: ExecutionContext,
-    cfg: Configuration
+      conn: MongoConnection,
+      ec: ExecutionContext,
+      cfg: Configuration
   ): MongoWorker = {
     import scala.concurrent.duration._
     val dbname = cfg.getOptional[String]("mongo.db").getOrElse("morph_demo")
@@ -45,18 +54,17 @@ class MongoModule extends Module {
   }
 }
 
-
 case class JppAnalysis(
-  _id: BSONObjectID,
-  timestamp: DateTime,
-  input: String,
-  analysis: Lattice,
-  version: String,
-  dicVersion: String,
-  ip: String,
-  userAgent: String,
-  duration: Double,
-  reported: Option[AnalysisReport]
+    _id: BSONObjectID,
+    timestamp: DateTime,
+    input: String,
+    analysis: Lattice,
+    version: String,
+    dicVersion: String,
+    ip: String,
+    userAgent: String,
+    duration: Double,
+    reported: Option[AnalysisReport]
 )
 
 case class AnalysisReport(nodes: Seq[Int])
@@ -109,14 +117,23 @@ class MongoWorker(db: DefaultDB)(implicit ec: ExecutionContext) {
     coll.insert(analysis)
   }
 
-  def get(from: Int, limit: Int, fixed: Boolean, sorting: BSONDocument): Future[Seq[JppAnalysis]] = {
-    val q = if (fixed) BSONDocument(
-      "reported" -> BSONDocument(
-        "$exists" -> true
-      )
-    ) else BSONDocument.empty
+  def get(
+      from: Int,
+      limit: Int,
+      fixed: Boolean,
+      sorting: BSONDocument): Future[Seq[JppAnalysis]] = {
+    val q =
+      if (fixed)
+        BSONDocument(
+          "reported" -> BSONDocument(
+            "$exists" -> true
+          )
+        )
+      else BSONDocument.empty
 
     val qo = coll.find(q).sort(sorting)
-    qo.options(qo.options.skip(from)).cursor[JppAnalysis]().collect(limit, Cursor.FailOnError[Seq[JppAnalysis]]())
+    qo.options(qo.options.skip(from))
+      .cursor[JppAnalysis]()
+      .collect(limit, Cursor.FailOnError[Seq[JppAnalysis]]())
   }
 }

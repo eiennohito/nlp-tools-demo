@@ -14,19 +14,23 @@ import scala.concurrent.ExecutionContext
   * @author eiennohito
   * @since 2016/09/30
   */
-class JumanppAdmin @Inject() (
-  mw: MongoWorker
-)(implicit ec: ExecutionContext) extends InjectedController {
+class JumanppAdmin @Inject()(
+    mw: MongoWorker
+)(implicit ec: ExecutionContext)
+    extends InjectedController {
 
   def stats() = Action { Ok(views.html.jppadmin()) }
 
   def queries() = Action.async { req =>
     val from = req.getQueryString("from").flatMap(XInt.unapply).getOrElse(0)
     val fixed = req.getQueryString("fixed").contains("true")
-    val sorting = req.getQueryString("sorting").collect({
-      case "date" => BSONDocument("timestamp" -> 1)
-      case "date-" => BSONDocument("timestamp" -> -1)
-    }).getOrElse(BSONDocument("timestamp" -> 1))
+    val sorting = req
+      .getQueryString("sorting")
+      .collect({
+        case "date"  => BSONDocument("timestamp" -> 1)
+        case "date-" => BSONDocument("timestamp" -> -1)
+      })
+      .getOrElse(BSONDocument("timestamp" -> 1))
 
     mw.get(from, 100, fixed, sorting).map { items =>
       val dateFormatter = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm")

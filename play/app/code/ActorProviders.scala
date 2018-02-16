@@ -12,4 +12,3 @@ class MainModule extends Module {
     binder.install(new MongoModule)
   }
 }
-

@@ -7,26 +7,36 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.scalajs.js
 import scala.scalajs.js.URIUtils
 import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
-import scala.util.{Failure, Success}
-
 
 @JSExportTopLevel("GraphRenderer")
 object GraphRenderer {
 
   val BOSnode = JumanppLatticeNode(
-    0, 0,
-    "BOS", "BOS", "", "",
-    "", "", "", "",
-    0, 0, 0, 0,
-    Seq.empty, Seq.empty, Seq.empty,
+    0,
+    0,
+    "BOS",
+    "BOS",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    0,
+    0,
+    0,
+    0,
+    Seq.empty,
+    Seq.empty,
+    Seq.empty,
     NodeScores(0, 0, 0)
   )
 
   @JSExport
   def render(api: String, text: String) = {
     import scala.scalajs.js.JSConverters._
-    analyzeText(api, text).map {
-      resp => handleResponse(resp)
+    analyzeText(api, text).map { resp =>
+      handleResponse(resp)
     }.toJSPromise
   }
 
@@ -39,8 +49,6 @@ object GraphRenderer {
   }
 
   def nid(n: JumanppLatticeNode) = s"N#${n.num}"
-
-
   @JSExport
   def lattice() = stored
 
@@ -65,20 +73,23 @@ object GraphRenderer {
     for (n <- stored.nodes) {
       val nodeClasses = n.rank.map(r => s"rank-$r").mkString("simple ", " ", "")
       graph.setNode(nid(n),
-        NodeConfig(
-          n.num,
-          label = renderNode(n),
-          cls = nodeClasses,
-          tooltip = renderTooltip(n)
-        ))
+                    NodeConfig(
+                      n.num,
+                      label = renderNode(n),
+                      cls = nodeClasses,
+                      tooltip = renderTooltip(n)
+                    ))
       val prev = n.previous
       for (p <- prev) {
         val prevNode = byId.getOrElse(p, BOSnode)
-        val commonRanks = if (prevNode.rank.isEmpty) n.rank
-        else n.rank.intersect(prevNode.rank)
+        val commonRanks =
+          if (prevNode.rank.isEmpty) n.rank
+          else n.rank.intersect(prevNode.rank)
         if (commonRanks.nonEmpty) {
           val edgeClasses = commonRanks.map(r => s"rank-$r").mkString("connection ", " ", "")
-          graph.setEdge(nid(prevNode), nid(n), EdgeConfig(renderEdgeLabel(commonRanks, totalSize), cls = edgeClasses))
+          graph.setEdge(nid(prevNode),
+                        nid(n),
+                        EdgeConfig(renderEdgeLabel(commonRanks, totalSize), cls = edgeClasses))
         }
       }
     }
@@ -91,44 +102,47 @@ object GraphRenderer {
 
     val features = n.features.map { f =>
       val value = f.value match {
-        case None => span(`class` := "value empty")
+        case None    => span(`class` := "value empty")
         case Some(s) => span(`class` := "value", s)
       }
       div(
         `class` := "feature",
-        span(`class`:="name", f.name),
+        span(`class` := "name", f.name),
         value
       )
     }
 
     val sobj = n.scores
     val scores = div(
-      `class`:= "scores",
+      `class` := "scores",
       div(
         `class` := "header",
         "Scores"
       ),
       div(
-        `class`:= "lang-model",
+        `class` := "lang-model",
         sobj.languageModel.formatted("LM: %.3e")
       ),
       div(
-        `class`:= "features",
+        `class` := "features",
         sobj.features.formatted("Feat: %.3e")
       ),
       div(
-        `class`:= "morph-analysis",
+        `class` := "morph-analysis",
         sobj.morphAnalysis.formatted("MA: %.3e")
       )
     )
 
-    val featureTag = if (n.features.nonEmpty) div(
-      div(
-        `class` := "header",
-        "Features"
-      ),
-      features
-    ) else div()
+    val featureTag =
+      if (n.features.nonEmpty)
+        div(
+          div(
+            `class` := "header",
+            "Features"
+          ),
+          features
+        )
+      else div()
     div(
       featureTag,
       scores
@@ -190,7 +204,6 @@ object GraphRenderer {
       bldr.append(x1).append("\u2060-\u2060").append(x2)
     } else bldr.append(x2)
 
-
     bldr.result()
   }
 
@@ -199,7 +212,7 @@ object GraphRenderer {
 
     div(
       `class` := "ranks",
-     if (common.lengthCompare(totalSize) == 0) "*" else compressSeq(common.toIndexedSeq)
+      if (common.lengthCompare(totalSize) == 0) "*" else compressSeq(common.toIndexedSeq)
     ).render
   }
 
@@ -328,15 +341,12 @@ object GraphRenderer {
         )
       }
 
-      span( `class` := "features",
-        "\"",
-        interleave(f1 +: other, stringFrag(" ")),
-        "\""
-      )
+      span(`class` := "features", "\"", interleave(f1 +: other, stringFrag(" ")), "\"")
     }
   }
 
-  def interleave[T, U >: T](cont: Seq[T], sep: U)(implicit cbf: CanBuildFrom[Seq[T], U, Seq[U]]): Seq[U] = {
+  def interleave[T, U >: T](cont: Seq[T], sep: U)(
+      implicit cbf: CanBuildFrom[Seq[T], U, Seq[U]]): Seq[U] = {
     if (cont.isEmpty) return Seq.empty
 
     val bldr = cbf()
@@ -402,7 +412,9 @@ object GraphRenderer {
             `name` := s"node-${n.num}",
             `type` := "checkbox",
             cls := "report-visible",
-            onclick := { () => changeValue(n.num) }
+            onclick := { () =>
+              changeValue(n.num)
+            }
           )
         ),
         div(
@@ -413,17 +425,28 @@ object GraphRenderer {
               "@ "
             )
           } else (),
-          span(`class` := "surface", n.surface), span(" "),
-          span(`class` := "reading", n.reading), span(" "),
-          span(`class` := "midasi", n.midasi), span(" "),
-          span(`class` := "pos", n.pos), span(" "),
-          span(`class` := "posId num", n.posId), span(" "),
-          span(`class` := "subpos", n.subpos), span(" "),
-          span(`class` := "subposId num", n.subposId), span(" "),
-          span(`class` := "conjtype", n.conjtype), span(" "),
-          span(`class` := "conjtypeId num", n.conjtypeId), span(" "),
-          span(`class` := "conjform", n.conjform), span(" "),
-          span(`class` := "conjformId num", n.conjformId), span(" "),
+          span(`class` := "surface", n.surface),
+          span(" "),
+          span(`class` := "reading", n.reading),
+          span(" "),
+          span(`class` := "midasi", n.midasi),
+          span(" "),
+          span(`class` := "pos", n.pos),
+          span(" "),
+          span(`class` := "posId num", n.posId),
+          span(" "),
+          span(`class` := "subpos", n.subpos),
+          span(" "),
+          span(`class` := "subposId num", n.subposId),
+          span(" "),
+          span(`class` := "conjtype", n.conjtype),
+          span(" "),
+          span(`class` := "conjtypeId num", n.conjtypeId),
+          span(" "),
+          span(`class` := "conjform", n.conjform),
+          span(" "),
+          span(`class` := "conjformId num", n.conjformId),
+          span(" "),
           featureObjRepr(n)
         ),
         br
@@ -516,7 +539,8 @@ object PostagsForDisplay {
     "動詞性接尾辞" -> "動接",
     "その他" -> "他",
     "カタカナ" -> "カ",
-    "アルファベット" -> "A")
+    "アルファベット" -> "A"
+  )
 
   val conj = Map(
     "*" -> "*",
@@ -551,7 +575,8 @@ object PostagsForDisplay {
     "助動詞そうだ型" -> "助そう",
     "助動詞く型" -> "助く",
     "動詞性接尾辞ます型" -> "ます",
-    "動詞性接尾辞うる型" -> "うる")
+    "動詞性接尾辞うる型" -> "うる"
+  )
 
   val forms = Map(
     "*" -> "*",
