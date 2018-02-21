@@ -2,12 +2,6 @@ resolvers += "Typesafe repository" at "https://repo.typesafe.com/typesafe/releas
 
 libraryDependencies += "com.github.os72" % "protoc-jar" % "3.5.0"
 
-val scalaPbVersion = "0.6.7"
-
-addSbtPlugin("com.thesamet" % "sbt-protoc" % "0.99.14")
-
-libraryDependencies += "com.trueaccord.scalapb" %% "compilerplugin" % scalaPbVersion
-
 // The Play plugin
 addSbtPlugin("com.typesafe.play" % "sbt-plugin" % "2.6.10")
 
@@ -31,3 +25,7 @@ addSbtPlugin("com.vmunier" % "sbt-web-scalajs" % "1.0.6")
 
 addSbtPlugin("org.portable-scala" % "sbt-crossproject"         % "0.3.1")
 addSbtPlugin("org.portable-scala" % "sbt-scalajs-crossproject" % "0.3.1")
+
+val scalaPbVersion = "0.7.0"
+libraryDependencies += "com.thesamet.scalapb" %% "compilerplugin-shaded" % scalaPbVersion
+addSbtPlugin("com.thesamet" % "sbt-protoc" % "0.99.15" exclude ("com.thesamet.scalapb", "protoc-bridge_2.12"))

@@ -12,6 +12,14 @@ POST        /demo/jumanpp_report          controllers.Jumanpp.report
 GET         /admin/jumanpp                controllers.JumanppAdmin.stats
 GET         /admin/api/jpp/queries        controllers.JumanppAdmin.queries
 
+GET         /atool                        controllers.Annotation.default()
+POST        /atool                        controllers.Annotation.handleLogin()
+GET         /atool/logout                 controllers.Annotation.logout()
+GET         /atool/api                    controllers.AnnotationApi.root()
+
+POST        /atool/api/users              controllers.AnnotationUsersApiController.handler()
+GET         /atool/api/user               controllers.AnnotationUsersApiController.user()
+
 # Map static resources from the /public folder to the /assets URL path
 GET         /assets/*file                 controllers.Assets.at(path="/public", file)
-->         /webjars/*file                  webjars.Routes
+->          /webjars/*file                webjars.Routes

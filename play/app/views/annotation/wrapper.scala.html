@@ -1,0 +1,37 @@
+@import code.annotation.SessionUser
+@import code.annotation.AnnotationToolUser
+@(title: String)(body: Html)(implicit req: RequestHeader)
+
+@userSnippet(u: AnnotationToolUser) = {
+    <div class="user-info">
+        Hello,
+        <span class="user-name">@u.name</span>
+
+        <a href="@routes.Annotation.logout()">Logout</a>
+    </div>
+}
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>@title</title>
+        @scalajs.html.scripts(
+            "scalajsclient",
+            name => routes.Assets.at(name).toString,
+            name => getClass.getResource(s"/public/$name") != null)
+    </head>
+    <body>
+        @* <div class="header">
+            @{
+                val u = req.attrs.get(SessionUser.User)
+                if (u.isEmpty) {
+                    <span class="no-user">No User</span>
+                } else {
+                    userSnippet(u.get)
+                }
+            }
+        </div> *@
+        @body
+    </body>
+</html>

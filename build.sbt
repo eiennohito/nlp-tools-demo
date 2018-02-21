@@ -29,7 +29,9 @@ lazy val scalajsclient = (project in file("scalajs")).settings(
   libraryDependencies ++= Seq(
     "org.scala-js" %%% "scalajs-dom" % "0.9.4",
     "com.lihaoyi" %%% "scalatags" % "0.6.7",
-    "com.github.japgolly.scalajs-react" %%% "core" % "1.1.1"
+    "com.github.japgolly.scalajs-react" %%% "core" % "1.1.1",
+    "com.github.japgolly.scalajs-react" %%% "extra" % "1.1.1",
+    "com.github.japgolly.scalajs-react" %%% "ext-monocle" % "1.1.1"
   ),
   jsDependencies ++= Seq(
     "org.webjars.npm" % "dagre-d3" % "0.4.17" / "dist/dagre-d3.js" minified "dist/dagre-d3.min.js",
@@ -63,7 +65,17 @@ lazy val shared = crossProject(JSPlatform, JVMPlatform)
   .in(file("shared"))
   .jsConfigure(_ enablePlugins ScalaJSWeb)
   .settings(
-    libraryDependencies ++= Seq("com.github.benhutchison" %%% "prickle" % "1.1.13")
+    libraryDependencies ++= Seq(
+      "com.github.benhutchison" %%% "prickle" % "1.1.13",
+      "com.thesamet.scalapb" %%% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion,
+      "com.thesamet.scalapb" %%% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"
+    ),
+    PB.targets in Compile := Seq(
+      scalapb.gen(grpc=true, flatPackage=true) -> (sourceManaged in Compile).value
+    ),
+    Compile / PB.protoSources := Seq(
+      thisProject.value.base / "../src/main/protobuf"
+    )
   )
 
 lazy val sharedJvm = shared.jvm

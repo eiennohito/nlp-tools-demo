@@ -1,0 +1,14 @@
+@(isAdmin: Boolean)(implicit req: RequestHeader)
+
+@views.html.annotation.wrapper("ATool") {
+    <script src="/assets/javascripts/atool-entry.js"
+    type="application/javascript"
+    id="atool-entry"
+    data-entry-url="@routes.AnnotationApi.root()"
+    data-csrf-token="@helper.CSRF.getToken.value"
+    data-is-admin="@isAdmin"
+    ></script>
+    <div id="annotation-tool">
+        <p>This is an annotation tool!</p>
+    </div>
+}

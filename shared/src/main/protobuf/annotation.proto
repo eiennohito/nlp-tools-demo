@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+option java_package = "code.annotation";
+
+message AnnotationUser {
+    string id = 1;
+    string name = 2;
+    string token = 3;
+    bool admin = 4;
+}
+
+message AllUsers {
+    repeated AnnotationUser users = 1;
+}
+
+message AddUser {
+    string name = 1;
+}
+
+message ChangeAdminStatus {
+    string id = 1;
+    bool status = 2;
+}
+
+message AnnotationUserCommand {
+    oneof command {
+        AddUser add = 1;
+        ChangeAdminStatus admin = 2;
+        AllUsers list = 3;
+    }
+}
