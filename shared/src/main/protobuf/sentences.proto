@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+option java_package = "code.annotation";
+
+import "scalapb/scalapb.proto";
+
+message ExampleToken {
+    string surface = 1;
+    bool unit = 2;
+    map<string, string> tags = 3;
+    repeated int32 noBreak = 4;
+}
+
+message Annotation {
+    string annotatorId = 1 [(scalapb.field).type = "code.annotation.ObjId"];
+    string value = 2;
+    string comment = 3;
+}
+
+message TokenSpan {
+    int32 index = 1;
+    repeated ExampleToken tokens = 2;
+    repeated Annotation annotations = 3;
+}
+
+message SentenceBlock {
+    int32 offset = 1;
+    repeated TokenSpan spans = 2;
+    repeated Annotation annotations = 3;
+}
+
+enum SentenceStatus {
+    NotAnnotated = 0;
+    TotalAgreement = 1;
+    PartialAgreement = 2;
+    WorkRequired = 3;
+}
+
+message Sentence {
+    string id = 1 [(scalapb.field).annotations = "@reactivemongo.bson.Macros.Annotations.Key(\"_id\")"];
+    repeated SentenceBlock blocks = 2;
+    repeated string originalComments = 3;
+    int32 numAnnotations = 4;
+    SentenceStatus status = 5;
+}

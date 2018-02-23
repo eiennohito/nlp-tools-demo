@@ -1,14 +1,15 @@
-package annotation
+package code.annotation
 
 import java.io.InputStream
 
-import code.annotation.{AllUsers, AnnotationUser, AnnotationUserCommand}
 import org.scalajs.dom.crypto.BufferSource
 import org.scalajs.dom.experimental._
+import org.scalajs.dom.WebSocket
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.scalajs.js
 import scala.scalajs.js.Dictionary
-import scala.scalajs.js.typedarray.{Int8Array, TypedArrayBuffer}
+import scala.scalajs.js.typedarray.Int8Array
 
 class JsTypedArrayInputStream(buf: Int8Array) extends InputStream {
   private var position = 0
@@ -59,6 +60,8 @@ class JsTypedArrayInputStream(buf: Int8Array) extends InputStream {
   }
 }
 
+case class WebsocketConnection[Fn](fn: Fn, socket: WebSocket)
+
 class ApiService(apiUrl: String, csrfToken: String)(implicit ec: ExecutionContext) {
   def userListCommand(cmd: AnnotationUserCommand): Future[Seq[AnnotationUser]] = {
     import scala.scalajs.js.typedarray._
@@ -105,5 +108,25 @@ class ApiService(apiUrl: String, csrfToken: String)(implicit ec: ExecutionContex
           AnnotationUser.parseFrom(new JsTypedArrayInputStream(buf))
         }
       }
+  }
+
+  def importWsCall(onMessage: String => Unit): WebSocket = {
+    val wsUrl = apiUrl.replaceFirst("http", "ws")
+    var fullUrl = s"$wsUrl/importws"
+    if ("wss?://".r.findFirstMatchIn(fullUrl).isEmpty) {
+      val loc = org.scalajs.dom.document.location
+      val baseProtocol = loc.protocol
+      val prot = baseProtocol match {
+        case "http:"  => "ws"
+        case "https:" => "wss"
+        case _        => throw new Exception(s"Invalid protocol: $baseProtocol")
+      }
+      fullUrl = s"$prot://${loc.host}$fullUrl"
+    }
+    val socket = new WebSocket(fullUrl)
+    socket.onmessage = { ev =>
+      onMessage(ev.data.toString)
+    }
+    socket
   }
 }

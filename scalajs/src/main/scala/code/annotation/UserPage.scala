@@ -1,6 +1,5 @@
-package annotation
+package code.annotation
 
-import code.annotation.AnnotationUser
 import japgolly.scalajs.react._
 import japgolly.scalajs.react.component.builder.Lifecycle.StateRW
 import japgolly.scalajs.react.extra.StateSnapshot

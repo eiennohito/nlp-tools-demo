@@ -21,7 +21,7 @@ lazy val playserver = (project in file("play")).settings(
   serverLoading in Debian := Some(ServerLoader.Systemd)
 ).enablePlugins(PlayScala, DebianPlugin).
   aggregate(clients.map(projectToRef): _*).
-  dependsOn(sharedJvm, `akane-knp-akka`)
+  dependsOn(sharedJvm, `akane-knp-akka`, `akane-testkit` % Test)
 
 lazy val scalajsclient = (project in file("scalajs")).settings(
   scalaJSUseMainModuleInitializer := true,
@@ -68,7 +68,8 @@ lazy val shared = crossProject(JSPlatform, JVMPlatform)
     libraryDependencies ++= Seq(
       "com.github.benhutchison" %%% "prickle" % "1.1.13",
       "com.thesamet.scalapb" %%% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion,
-      "com.thesamet.scalapb" %%% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"
+      "com.thesamet.scalapb" %%% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
+      "org.reactivemongo" %% "reactivemongo" % "0.12.7" % Provided intransitive(),
     ),
     PB.targets in Compile := Seq(
       scalapb.gen(grpc=true, flatPackage=true) -> (sourceManaged in Compile).value
@@ -87,6 +88,8 @@ lazy val sharedJs = shared.js
 lazy val akane = project in file("akane")
 
 lazy val `akane-knp-akka` = project in file("akane/knp-akka")
+
+lazy val `akane-testkit` = project in file("akane/testkit")
 
 fork in run := true
 

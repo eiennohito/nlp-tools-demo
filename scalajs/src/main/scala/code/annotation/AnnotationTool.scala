@@ -1,4 +1,4 @@
-package annotation
+package code.annotation
 
 import japgolly.scalajs.react.extra.router.{BaseUrl, Path, Redirect, Router, RouterConfigDsl}
 import org.scalajs.dom.Element
@@ -10,6 +10,7 @@ sealed trait AnnotationPage
 case object LandingPage extends AnnotationPage
 case object UserInfo extends AnnotationPage
 case object Users extends AnnotationPage
+case object Import extends AnnotationPage
 
 @JSExportTopLevel("AnnotationTool")
 object AnnotationTool {
@@ -52,6 +53,7 @@ object AnnotationTool {
       (
         staticRoute(root, LandingPage) ~> render(Edits.Todo())
           | staticRoute("#userInfo", UserInfo) ~> render(Edits.UserDisplay())
+          | staticRoute("#import", Import) ~> render(SentenceImport.Importer(as))
           | userListRoute
       ).notFound(redirectToPage(LandingPage)(Redirect.Replace))
     }.logToConsole

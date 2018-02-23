@@ -1,4 +1,4 @@
-package annotation
+package code.annotation
 
 import japgolly.scalajs.react.vdom.html_<^._
 import japgolly.scalajs.react._
@@ -16,7 +16,8 @@ object Wrapper {
           <.div(
             ^.cls := "header",
             ctl.link(UserInfo)("User"),
-            ctl.link(Users)("Users")
+            ctl.link(Users)("Users"),
+            ctl.link(Import)("Import")
           ),
           <.div(
             ^.cls := "content",

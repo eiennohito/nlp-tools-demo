@@ -1,7 +1,7 @@
 package code.annotation
 
 import java.util.Base64
-import javax.inject.Singleton
+import javax.inject.{Inject, Singleton}
 
 import com.google.inject.Provides
 import net.codingwell.scalaguice.ScalaModule
@@ -10,11 +10,22 @@ import play.api.Configuration
 import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.api.commands.UpdateWriteResult
 import reactivemongo.api.{Cursor, DefaultDB, MongoConnection}
-import reactivemongo.bson.{BSONDocument, BSONDocumentHandler, BSONObjectID, Macros}
+import reactivemongo.bson.{
+  BSONArray,
+  BSONDocument,
+  BSONDocumentHandler,
+  BSONHandler,
+  BSONInteger,
+  BSONObjectID,
+  BSONValue,
+  Macros
+}
+import ws.kotonoha.akane.akka.AnalyzerActor.Failure
 
 import scala.collection.mutable
 import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.util.Try
+import scala.util.{Success, Try}
+import scalapb.{GeneratedEnum, GeneratedEnumCompanion}
 
 case class AnnotationDb(db: DefaultDB)
 
@@ -170,5 +181,84 @@ class AnnotationAuth(db: AnnotationDb)(implicit ec: ExecutionContext) {
       "_id" -> o._id
     )
     coll.update(q, o, upsert = true)
+  }
+}
+
+object SentenceBSON {
+  def enumFormat[T <: GeneratedEnum](
+      implicit comp: GeneratedEnumCompanion[T]): BSONHandler[BSONInteger, T] =
+    new BSONHandler[BSONInteger, T] {
+      override def read(bson: BSONInteger): T = comp.fromValue(bson.value)
+      override def write(t: T): BSONInteger = BSONInteger(t.value)
+    }
+
+  implicit def seqHandler[T](
+      implicit h: BSONHandler[BSONValue, T]): BSONHandler[BSONArray, Seq[T]] =
+    new BSONHandler[BSONArray, Seq[T]] {
+      override def read(bson: BSONArray): Seq[T] = readTry(bson).get
+      override def write(t: Seq[T]): BSONArray = {
+        BSONArray(t.map(o => h.write(o)))
+      }
+
+      override def readTry(bson: BSONArray): Try[Seq[T]] = {
+        bson.values
+          .foldLeft(Try(Vector.newBuilder[T])) { (b, o) =>
+            b match {
+              case scala.util.Failure(_) => b
+              case scala.util.Success(s) =>
+                h.readTry(o).map { v =>
+                  s += v
+                  s
+                }
+            }
+          }
+          .map(_.result())
+      }
+    }
+
+  implicit val objIdHandler: BSONHandler[BSONObjectID, ObjId] =
+    new BSONHandler[BSONObjectID, ObjId] {
+      override def read(bson: BSONObjectID): ObjId = ObjId(bson.stringify)
+      override def write(t: ObjId): BSONObjectID = writeTry(t).get
+      override def writeTry(t: ObjId): Try[BSONObjectID] = {
+        BSONObjectID.parse(t.id)
+      }
+    }
+
+  implicit val exampleTokenFormat: BSONDocumentHandler[ExampleToken] = Macros.handler[ExampleToken]
+  implicit val annotationFormat: BSONDocumentHandler[Annotation] = Macros.handler[Annotation]
+  implicit val tokenSpanFormat: BSONDocumentHandler[TokenSpan] = Macros.handler[TokenSpan]
+  implicit val blockFormat: BSONDocumentHandler[SentenceBlock] = Macros.handler[SentenceBlock]
+  implicit val statusFormat: BSONHandler[BSONInteger, SentenceStatus] = enumFormat[SentenceStatus]
+  implicit val sentenceFormat: BSONDocumentHandler[Sentence] = Macros.handler[Sentence]
+}
+
+class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) {
+  private val coll = db.db.collection[BSONCollection]("sentences")
+
+  import SentenceBSON._
+
+  def checkExistance(ids: Seq[String]): Future[Set[String]] = {
+    if (ids.isEmpty) {
+      return Future.successful(Set.empty)
+    }
+
+    val q = BSONDocument(
+      "_id" -> BSONDocument(
+        "$in" -> ids
+      )
+    )
+    val vals = BSONDocument(
+      "_id" -> 1
+    )
+    coll
+      .find(q, vals)
+      .cursor[BSONDocument]()
+      .collect[Set](ids.size, Cursor.FailOnError[Set[BSONDocument]]())
+      .map(_.map(_.getAs[String]("_id").get))
+  }
+
+  def saveSentences(data: Seq[Sentence]): Future[Int] = {
+    coll.insert[Sentence](ordered = false).many(data).map(_.totalN)
   }
 }

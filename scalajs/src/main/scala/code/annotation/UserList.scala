@@ -1,4 +1,5 @@
-package annotation
+package code.annotation
+
 import code.annotation._
 import japgolly.scalajs.react.vdom.html_<^._
 import japgolly.scalajs.react._
@@ -55,6 +56,7 @@ object UserList {
 
     private def adminLink(u: AnnotationUser) = {
       <.a(
+        ^.cls := "admin-link",
         ^.onClick --> Callback.future { service.changeAdmin(u).map(lst => replaceUsers(lst)) },
         if (u.admin) "Admin" else "Annotator"
       )
