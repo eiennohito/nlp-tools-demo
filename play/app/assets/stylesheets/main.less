@@ -245,3 +245,40 @@
 .user-info {
   float: right;
 }
+
+.sentence {
+  .sent-block {
+    display: block;
+
+    .block-normal {
+      max-width: 10cm;
+      margin: auto;
+    }
+
+    .block-diff {
+      max-width: 80%;
+      margin: auto;
+    }
+  }
+}
+
+.ann-options {
+
+  .opt-block {
+    display: inline-block;
+
+    :hover {
+      background-color: #1b95e0;
+    }
+  }
+  .opt-span {
+    width: 40%;
+  }
+  .opt-other {
+    width: 20%;
+  }
+
+  .opt-selected {
+    background-color: hsl(57, 26%, 84%) !important;
+  }
+}

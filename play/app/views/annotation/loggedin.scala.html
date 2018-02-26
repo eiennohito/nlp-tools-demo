@@ -1,4 +1,6 @@
-@(isAdmin: Boolean)(implicit req: RequestHeader)
+@import code.annotation.AnnotationToolUser
+
+@(u: AnnotationToolUser)(implicit req: RequestHeader)
 
 @views.html.annotation.wrapper("ATool") {
     <script src="/assets/javascripts/atool-entry.js"
@@ -6,8 +8,10 @@
     id="atool-entry"
     data-entry-url="@routes.AnnotationApi.root()"
     data-csrf-token="@helper.CSRF.getToken.value"
-    data-is-admin="@isAdmin"
+    data-is-admin="@u.admin"
+    data-uid="@u._id.stringify"
     ></script>
+    <link rel="stylesheet" media="screen" href="@routes.Assets.at("stylesheets/main.css")">
     <div id="annotation-tool">
         <p>This is an annotation tool!</p>
     </div>

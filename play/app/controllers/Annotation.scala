@@ -38,7 +38,7 @@ class Annotation @Inject()(
   def default = Action { implicit req =>
     req.attrs.get(SessionUser.User) match {
       case None    => Ok(views.html.annotation.login())
-      case Some(s) => Ok(views.html.annotation.loggedin(s.admin))
+      case Some(s) => Ok(views.html.annotation.loggedin(s))
     }
   }
 

@@ -17,6 +17,7 @@ POST        /atool                        controllers.Annotation.handleLogin()
 GET         /atool/logout                 controllers.Annotation.logout()
 GET         /atool/api                    controllers.AnnotationApi.root()
 
+POST /atool/api/sentences controllers.SentenceApiController.handler()
 POST        /atool/api/users              controllers.AnnotationUsersApiController.handler()
 GET         /atool/api/user               controllers.AnnotationUsersApiController.user()
 

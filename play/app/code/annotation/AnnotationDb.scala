@@ -7,6 +7,7 @@ import com.google.inject.Provides
 import net.codingwell.scalaguice.ScalaModule
 import org.apache.commons.lang3.RandomUtils
 import play.api.Configuration
+import play.api.mvc.Result
 import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.api.commands.UpdateWriteResult
 import reactivemongo.api.{Cursor, DefaultDB, MongoConnection}
@@ -234,6 +235,7 @@ object SentenceBSON {
 }
 
 class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) {
+
   private val coll = db.db.collection[BSONCollection]("sentences")
 
   import SentenceBSON._
@@ -260,5 +262,24 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) {
 
   def saveSentences(data: Seq[Sentence]): Future[Int] = {
     coll.insert[Sentence](ordered = false).many(data).map(_.totalN)
+  }
+
+  def getSentences(uid: BSONObjectID, req: GetSentences): Future[Seq[Sentence]] = {
+    var q = BSONDocument(
+      "_id" -> BSONDocument(
+        "$nin" -> req.exceptIds
+      )
+    )
+
+    if (req.newForUser) {
+      val newq = BSONDocument(
+        "blocks.annotations.annotatorId" -> uid
+      )
+      q = q.merge(newq)
+    }
+
+    val max = if (req.limit == 0) 15 else req.limit
+
+    coll.find(q).cursor[Sentence]().collect(max, Cursor.FailOnError[Seq[Sentence]]())
   }
 }

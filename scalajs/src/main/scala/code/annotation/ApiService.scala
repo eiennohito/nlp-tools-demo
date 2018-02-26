@@ -10,6 +10,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.scalajs.js
 import scala.scalajs.js.Dictionary
 import scala.scalajs.js.typedarray.Int8Array
+import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
 
 class JsTypedArrayInputStream(buf: Int8Array) extends InputStream {
   private var position = 0
@@ -90,6 +91,41 @@ class ApiService(apiUrl: String, csrfToken: String)(implicit ec: ExecutionContex
           resp.arrayBuffer().toFuture.map { ab =>
             val buf = new Int8Array(ab)
             AllUsers.parseFrom(new JsTypedArrayInputStream(buf)).users
+          }
+        } else {
+          Future.failed(new RuntimeException("request failed"))
+        }
+      }
+  }
+
+  def sentenceCall[R <: GeneratedMessage with Message[R]](cmd: SentenceRequest)(
+      implicit comp: GeneratedMessageCompanion[R]): Future[R] = {
+    import scala.scalajs.js.typedarray._
+
+    val requestPath = s"$apiUrl/sentences"
+    val obj = cmd.toByteArray
+    val u8arr = obj.toTypedArray
+    val src: BufferSource = u8arr
+
+    Fetch
+      .fetch(
+        requestPath,
+        RequestInit(
+          credentials = RequestCredentials.include,
+          method = HttpMethod.POST,
+          headers = Dictionary.apply(
+            "Content-Type" -> "application/x-protobuf",
+            "Csrf-Token" -> csrfToken
+          ),
+          body = src
+        )
+      )
+      .toFuture
+      .flatMap { resp =>
+        if (resp.ok && resp.headers.get("Content-Type").get == "application/x-protobuf") {
+          resp.arrayBuffer().toFuture.map { ab =>
+            val buf = new Int8Array(ab)
+            comp.parseFrom(new JsTypedArrayInputStream(buf))
           }
         } else {
           Future.failed(new RuntimeException("request failed"))

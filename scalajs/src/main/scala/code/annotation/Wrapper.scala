@@ -16,6 +16,7 @@ object Wrapper {
           <.div(
             ^.cls := "header",
             ctl.link(UserInfo)("User"),
+            ctl.link(AnnotatePage)("Annotate"),
             ctl.link(Users)("Users"),
             ctl.link(Import)("Import")
           ),

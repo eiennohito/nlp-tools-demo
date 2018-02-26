@@ -5,6 +5,7 @@
         var apiUrl = entryPoint.getAttribute('data-entry-url');
         var csrfToken = entryPoint.getAttribute("data-csrf-token");
         var isAdmin = entryPoint.getAttribute("data-is-admin") === "true";
-        window.AnnotationTool.bind(apiUrl, elem, csrfToken, isAdmin);
+        var uid = entryPoint.getAttribute("data-uid");
+        window.AnnotationTool.bind(apiUrl, elem, csrfToken, isAdmin, uid);
     });
 })(window);

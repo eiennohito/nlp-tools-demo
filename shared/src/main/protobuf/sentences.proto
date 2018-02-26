@@ -43,3 +43,27 @@ message Sentence {
     int32 numAnnotations = 4;
     SentenceStatus status = 5;
 }
+
+message GetSentences {
+    repeated string exceptIds = 1;
+    int32 limit = 2;
+    bool newForUser = 3;
+}
+
+message SentenceRequest {
+    oneof request {
+        GetSentences sentences = 1;
+        Annotate annotate = 2;
+    }
+}
+
+message Sentences {
+    repeated Sentence sentences = 1;
+}
+
+message Annotate {
+    string sentenceId = 1;
+    int32 offset = 2;
+    string annotation = 3;
+    string comment = 4;
+}
