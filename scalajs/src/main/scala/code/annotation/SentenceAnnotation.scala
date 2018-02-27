@@ -1,13 +1,10 @@
 package code.annotation
 
 import japgolly.scalajs.react._
-import japgolly.scalajs.react.extra.StateSnapshot
 import japgolly.scalajs.react.vdom.html_<^._
 
-import scala.concurrent.Future
-import scala.util.Random
-
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 
 class SentenceApi(api: ApiService, uid: ObjId) {
   def fetchNextSentences(ignore: Seq[String], limit: Int = 15): Future[Seq[Sentence]] = {
@@ -96,10 +93,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
           spans.head.tokens.map(s => <.span(s.surface)).toTagMod
         )
       } else {
-        <.div(
-          ^.cls := "block-diff",
-          cmpBody(spans, state, props.id.hashCode() ^ props.block.offset.hashCode())
-        )
+        cmpBody(spans, state, props.id.hashCode() ^ props.block.offset.hashCode())
       }
 
       <.div(
@@ -111,7 +105,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
 
     def renderSpan(s1: TokenSpan, annotation: Annotation, key: String) = {
       <.div(
-        ^.cls := "opt-block opt-span",
+        ^.cls := s"opt-block opt-span block-$key ann-selection",
         ^.key := key,
         ^.classSet(
           "opt-selected" -> (s1.index.toString == annotation.value)
@@ -120,12 +114,12 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
           <.div(
             ^.cls := "token",
             <.span(
-              ^.cls := "surface",
-              t.surface,
+              ^.cls := "token-data surface",
+              t.surface
             ),
-            t.tags.map { tag =>
+            t.tags.toSeq.sortBy(_._1).map { tag =>
               <.span(
-                ^.cls := "tag",
+                ^.cls := "token-data tag",
                 <.span(
                   ^.cls := "key",
                   tag._1,
@@ -156,7 +150,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
         ^.key := "opt-other",
         otherOptions.map { opt =>
           <.div(
-            ^.cls := "other-suboption",
+            ^.cls := "other-suboption ann-selection",
             ^.classSet(
               "opt-selected" -> (annotation.value == opt)
             ),
@@ -172,7 +166,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
       val s2Dom = renderSpan(s2, annotation, "s2")
       val otherOptions = renderOther(annotation)
       <.div(
-        ^.cls := "ann-options",
+        ^.cls := "ann-options block-diff",
         VdomArray(
           s1Dom,
           otherOptions,
@@ -197,6 +191,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
     .initialStateFromProps(p => annotationState(p.block))
     .backend(s => new BlockViewBackend(s))
     .renderBackend
+    .componentWillReceiveProps(e => e.setState(annotationState(e.nextProps.block)))
     .build
 
   val SentenceView = ScalaComponent
@@ -215,6 +210,14 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
         <.div(
           ^.cls := "parts",
           s.blocks.map(b => BlockView(BlockProps(b, s.id))).toTagMod
+        ),
+        <.div(
+          ^.cls := "sent-block",
+          <.button(
+            ^.cls := "next-sentence",
+            "次の文へ",
+            ^.onClick --> state.showNext
+          )
         )
       )
     }

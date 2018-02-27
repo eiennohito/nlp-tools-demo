@@ -248,37 +248,83 @@
 
 .sentence {
   .sent-block {
-    display: block;
+    display: flex;
 
     .block-normal {
-      max-width: 10cm;
+      max-width: 8cm;
       margin: auto;
+      color: #969696;
     }
 
     .block-diff {
-      max-width: 80%;
       margin: auto;
+      display: flex;
     }
+  }
+
+  .next-sentence {
+    margin: auto;
+    margin-top: 1cm;
+    width: 4cm;
+    height: 3cm;
+    font-size: large;
   }
 }
 
 .ann-options {
 
   .opt-block {
-    display: inline-block;
+    border-top: 1px dotted lightgray;
+    margin-top: 0.5cm;
+    margin-bottom: 0.5cm;
+  }
 
-    :hover {
-      background-color: #1b95e0;
+  .opt-span {
+    width: calc(50% - 3cm);
+    display: inline-flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+
+  .token {
+    max-width: 2.5cm;
+    display: inline-flex;
+    flex-direction: column;
+    margin-left: 1mm;
+    margin-right: 1mm;
+  }
+
+  .surface {
+    margin-bottom: 2.5mm;
+  }
+
+  .tag {
+    display: inline-flex;
+    flex-direction: column;
+
+    .key {
+      display: block;
+      font-size: 8pt;
+    }
+
+    .value {
+      display: block;
+      font-size: 9.5pt;
     }
   }
-  .opt-span {
-    width: 40%;
-  }
-  .opt-other {
-    width: 20%;
-  }
 
-  .opt-selected {
-    background-color: hsl(57, 26%, 84%) !important;
+  .opt-other {
+    width: 5cm;
+    margin-left: 0.5cm;
+    margin-right: 0.5cm;
+  }
+}
+
+.ann-selection {
+  &:hover {
+    background-color: #c3e0ff;
+  }
+  &.opt-selected {
+    background-color: hsl(57, 26%, 84%);
   }
 }
