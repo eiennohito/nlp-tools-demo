@@ -1,3 +1,4 @@
+import sbt.Keys.publishArtifact
 import sbt.Project.projectToRef
 
 lazy val clients = Seq(scalajsclient)
@@ -22,6 +23,11 @@ lazy val playserver = (project in file("play")).settings(
 ).enablePlugins(PlayScala, DebianPlugin).
   aggregate(clients.map(projectToRef): _*).
   dependsOn(sharedJvm, `akane-knp-akka`, `akane-testkit` % Test)
+  .settings(
+    publishArtifact in (Compile, packageDoc) := false,
+    publishArtifact in packageDoc := false,
+    sources in (Compile,doc) := Seq.empty
+  )
 
 lazy val scalajsclient = (project in file("scalajs")).settings(
   scalaJSUseMainModuleInitializer := true,
@@ -76,7 +82,8 @@ lazy val shared = crossProject(JSPlatform, JVMPlatform)
     ),
     Compile / PB.protoSources := Seq(
       thisProject.value.base / "../src/main/protobuf"
-    )
+    ),
+    publishArtifact in packageDoc := false,
   )
 
 lazy val sharedJvm = shared.jvm
