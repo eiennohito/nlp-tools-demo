@@ -10,7 +10,8 @@ class SentenceApi(api: ApiService, uid: ObjId) {
   def fetchNextSentences(ignore: Seq[String], limit: Int = 15): Future[Seq[Sentence]] = {
     val msg = GetSentences(
       exceptIds = ignore.distinct,
-      limit = limit
+      limit = limit,
+      newForUser = true
     )
 
     val wrapper = SentenceRequest(
@@ -18,6 +19,13 @@ class SentenceApi(api: ApiService, uid: ObjId) {
     )
 
     api.sentenceCall[Sentences](wrapper).map(_.sentences)
+  }
+
+  def annotate(ann: Annotate): Future[Annotation] = {
+    val req = SentenceRequest(
+      SentenceRequest.Request.Annotate(ann)
+    )
+    api.sentenceCall[Annotation](req)
   }
 }
 
@@ -44,7 +52,6 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
 
     def ids: List[String] = stored.map(_.id)
 
-
     def shouldGetNew: Boolean = stored.lengthCompare(5) < 0
   }
 
@@ -61,7 +68,8 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
 
     def maybeGetNewSentences() = scope.state.flatMap { s =>
       if (s.shouldGetNew) {
-        Callback.future(api.fetchNextSentences(s.ids).map(sents => scope.modState(_.addSentences(sents))))
+        Callback.future(
+          api.fetchNextSentences(s.ids).map(sents => scope.modState(_.addSentences(sents))))
       } else {
         Callback.empty
       }
@@ -69,8 +77,9 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
 
     def render(state: PageState): VdomElement = {
       state.currentSentence match {
-        case None    => <.div("No sentences")
-        case Some(s) => SentenceView(SentenceProps(s, scope.modState(_.moveToNext()) >> maybeGetNewSentences()))
+        case None => <.div("No sentences")
+        case Some(s) =>
+          SentenceView(SentenceProps(s, scope.modState(_.moveToNext()) >> maybeGetNewSentences()))
       }
     }
   }
@@ -81,22 +90,35 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
     .backend(sc => new PageBackend(sc))
     .renderBackend
     .componentDidMount(_.backend.init())
-    .shouldComponentUpdate(x => CallbackTo {
-      (x.currentState.currentSentence, x.nextState.currentSentence) match {
-        case ((Some(s1), Some(s2))) => s1.id != s2.id
-        case _ => true
-      }
-    }).build
+    .shouldComponentUpdate(x =>
+      CallbackTo {
+        (x.currentState.currentSentence, x.nextState.currentSentence) match {
+          case ((Some(s1), Some(s2))) => s1.id != s2.id
+          case _                      => true
+        }
+    })
+    .build
 
   class BlockViewBackend(scope: BackendScope[BlockProps, Annotation]) {
 
     def annotateAs(str: String) = scope.props.flatMap { p =>
       scope.modState { s =>
-        if (s.value == str) {
-          s.withValue("")
+        val annotationValue = if (s.value == str) {
+          ""
         } else {
-          s.withValue(str)
+          str
         }
+
+        val annreq = Annotate(
+          sentenceId = p.id,
+          offset = p.block.offset,
+          annotation = annotationValue,
+          annotatorId = uid
+        )
+
+        api.annotate(annreq)
+
+        s.withValue(annotationValue)
       }
     }
 
@@ -133,20 +155,23 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
               ^.cls := "token-data surface",
               t.surface
             ),
-            t.tags.toSeq.sortBy(_._1).map { tag =>
-              <.span(
-                ^.cls := "token-data tag",
+            t.tags.toSeq
+              .sortBy(_._1)
+              .map { tag =>
                 <.span(
-                  ^.cls := "key",
-                  tag._1,
-                  ":"
-                ),
-                <.span(
-                  ^.cls := "value",
-                  tag._2
+                  ^.cls := "token-data tag",
+                  <.span(
+                    ^.cls := "key",
+                    tag._1,
+                    ":"
+                  ),
+                  <.span(
+                    ^.cls := "value",
+                    tag._2
+                  )
                 )
-              )
-            }.toTagMod
+              }
+              .toTagMod
           )
         }.toTagMod,
         ^.onClick --> annotateAs(s1.index.toString)

@@ -66,4 +66,5 @@ message Annotate {
     int32 offset = 2;
     string annotation = 3;
     string comment = 4;
+    string annotatorId = 5 [(scalapb.field).type = "code.annotation.ObjId"];
 }

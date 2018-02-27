@@ -19,9 +19,11 @@ import reactivemongo.bson.{
   BSONInteger,
   BSONObjectID,
   BSONValue,
+  BSONWriter,
   Macros
 }
 import ws.kotonoha.akane.akka.AnalyzerActor.Failure
+import ws.kotonoha.akane.utils.XInt
 
 import scala.collection.mutable
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -273,13 +275,90 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) {
 
     if (req.newForUser) {
       val newq = BSONDocument(
-        "blocks.annotations.annotatorId" -> uid
+        "blocks.annotations.annotatorId" -> BSONDocument(
+          "$ne" -> uid
+        )
       )
       q = q.merge(newq)
     }
 
     val max = if (req.limit == 0) 15 else req.limit
 
-    coll.find(q).cursor[Sentence]().collect(max, Cursor.FailOnError[Seq[Sentence]]())
+    val sort = BSONDocument(
+      "_id" -> 1
+    )
+
+    coll.find(q).sort(sort).cursor[Sentence]().collect(max, Cursor.FailOnError[Seq[Sentence]]())
+  }
+
+  def annotate(req: Annotate, uid: BSONObjectID): Future[Annotation] = {
+    val sentQuery = BSONDocument(
+      "_id" -> req.sentenceId
+    )
+
+    val sentence = coll.find(sentQuery).requireOne[Sentence]
+
+    sentence.flatMap { s =>
+      val block = s.blocks.find(_.offset == req.offset).get
+      val annId = ObjId(uid.stringify)
+      val currentAnnotations = block.annotations
+      val annIdx = currentAnnotations.indexWhere(_.annotatorId == annId)
+      val newAnnotation = Annotation(
+        annotatorId = ObjId(uid.stringify),
+        value = req.annotation,
+        comment = req.comment
+      )
+
+      val newAnnotations = annIdx match {
+        case _ if req.annotation == "" =>
+          currentAnnotations.filterNot(_.annotatorId == annId)
+        case -1 =>
+          currentAnnotations ++ Seq(newAnnotation)
+        case idx =>
+          currentAnnotations.updated(idx, newAnnotation)
+      }
+
+      val newAnnNumber = annIdx match {
+        case -1 => Math.max(currentAnnotations.length + 1, s.numAnnotations)
+        case _ if req.annotation == "" =>
+          val otherNumber = s.blocks
+            .filterNot(_.offset == req.offset)
+            .map(_.annotations.length)
+            .foldLeft(0)(_ max _)
+          val myNumber = newAnnotations.length
+          Math.max(otherNumber, myNumber)
+        case _ => s.numAnnotations
+      }
+
+      val newStatus = (s.status, req.annotation) match {
+        case (SentenceStatus.NotAnnotated | SentenceStatus.TotalAgreement, XInt(_)) =>
+          if (currentAnnotations
+                .filterNot(_.annotatorId == annId)
+                .forall(v => v.value == req.annotation)) {
+            SentenceStatus.TotalAgreement
+          } else {
+            SentenceStatus.PartialAgreement
+          }
+        case (SentenceStatus.PartialAgreement, XInt(_)) => SentenceStatus.PartialAgreement
+        case _                                          => SentenceStatus.WorkRequired
+      }
+
+      val query = BSONDocument(
+        "_id" -> req.sentenceId,
+        "blocks.offset" -> req.offset
+      )
+
+      val update = BSONDocument(
+        "$set" -> BSONDocument(
+          "blocks.$.annotations" -> BSONArray(
+            newAnnotations.map(a => annotationFormat.write(a))
+          ),
+          "status" -> newStatus,
+          "numAnnotations" -> newAnnNumber
+        )
+      )
+
+      coll.update(query, update).map(_ => newAnnotation)
+    }
   }
 }

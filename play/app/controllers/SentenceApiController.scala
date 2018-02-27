@@ -4,6 +4,7 @@ import javax.inject.Inject
 
 import code.annotation._
 import play.api.mvc.{InjectedController, Result}
+import reactivemongo.bson.BSONObjectID
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -16,6 +17,11 @@ class SentenceApiController @Inject()(
     body.request match {
       case SentenceRequest.Request.Sentences(sents) =>
         dbo.getSentences(user._id, sents).map(sents => Ok(LiftPB(Sentences(sents))))
+      case SentenceRequest.Request.Annotate(obj) =>
+        val uid = if (user.admin) {
+          BSONObjectID.parse(obj.annotatorId.id).getOrElse(user._id)
+        } else user._id
+        dbo.annotate(obj, uid).map(x => Ok(LiftPB(x)))
       case _ => Future.successful(NotImplemented)
     }
   }
