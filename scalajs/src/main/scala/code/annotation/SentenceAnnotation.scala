@@ -191,7 +191,13 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
     .initialStateFromProps(p => annotationState(p.block))
     .backend(s => new BlockViewBackend(s))
     .renderBackend
-    .componentWillReceiveProps(e => e.setState(annotationState(e.nextProps.block)))
+    .componentWillReceiveProps { ev =>
+      if (ev.nextProps.id != ev.currentProps.id) {
+        ev.setState(annotationState(ev.nextProps.block))
+      } else {
+        Callback.empty
+      }
+    }
     .build
 
   val SentenceView = ScalaComponent
