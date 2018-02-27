@@ -25,24 +25,27 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
 
   private val api = new SentenceApi(apiSvc, uid)
 
-  class PageState() {
-    private var nextSentences = List.empty[Sentence]
-    def currentSentence = nextSentences.headOption
+  case class PageState(stored: List[Sentence] = Nil) {
+    def currentSentence: Option[Sentence] = stored.headOption
     def addSentences(sentences: Seq[Sentence]): PageState = {
-      nextSentences = nextSentences ++ sentences.filterNot(nextSentences.contains)
-      this
+      val curIds = ids.toSet
+      val nextSentences = stored ++ sentences.filterNot(s => curIds.contains(s.id))
+      PageState(nextSentences)
     }
 
-    def moveToNext() = {
-      nextSentences match {
-        case _ :: xs => nextSentences = xs
-        case _       => //noop
+    def moveToNext(): PageState = {
+      val nextSentences = stored match {
+        case _ :: xs => xs
+        case _       => Nil
       }
 
-      this
+      PageState(nextSentences)
     }
 
-    def ids = nextSentences.map(_.id)
+    def ids: List[String] = stored.map(_.id)
+
+
+    def shouldGetNew: Boolean = stored.lengthCompare(5) < 0
   }
 
   case class SentenceProps(sentence: Sentence, showNext: Callback)
@@ -56,10 +59,18 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
         }
       }.void
 
+    def maybeGetNewSentences() = scope.state.flatMap { s =>
+      if (s.shouldGetNew) {
+        Callback.future(api.fetchNextSentences(s.ids).map(sents => scope.modState(_.addSentences(sents))))
+      } else {
+        Callback.empty
+      }
+    }
+
     def render(state: PageState): VdomElement = {
       state.currentSentence match {
         case None    => <.div("No sentences")
-        case Some(s) => SentenceView(SentenceProps(s, scope.modState(_.moveToNext())))
+        case Some(s) => SentenceView(SentenceProps(s, scope.modState(_.moveToNext()) >> maybeGetNewSentences()))
       }
     }
   }
@@ -70,6 +81,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
     .backend(sc => new PageBackend(sc))
     .renderBackend
     .componentDidMount(_.backend.init())
+    .shouldComponentUpdate(_.)
     .build
 
   class BlockViewBackend(scope: BackendScope[BlockProps, Annotation]) {
