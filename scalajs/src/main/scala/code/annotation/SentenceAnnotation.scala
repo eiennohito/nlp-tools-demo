@@ -81,8 +81,12 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
     .backend(sc => new PageBackend(sc))
     .renderBackend
     .componentDidMount(_.backend.init())
-    .shouldComponentUpdate(_.)
-    .build
+    .shouldComponentUpdate(x => CallbackTo {
+      (x.currentState.currentSentence, x.nextState.currentSentence) match {
+        case ((Some(s1), Some(s2))) => s1.id != s2.id
+        case _ => true
+      }
+    }).build
 
   class BlockViewBackend(scope: BackendScope[BlockProps, Annotation]) {
 
