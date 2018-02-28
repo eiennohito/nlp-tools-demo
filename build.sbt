@@ -9,7 +9,7 @@ lazy val playserver = (project in file("play")).settings(
     "com.vmunier" %% "scalajs-scripts" % "1.1.1",
     "org.webjars" %% "webjars-play" % "2.6.3",
     "org.webjars" % "bootstrap" % "3.1.1-2",
-    "org.reactivemongo" %% "reactivemongo" % "0.12.7",
+    "org.reactivemongo" %% "reactivemongo" % "0.13.0",
     "net.codingwell" %% "scala-guice" % "4.1.1",
     guice
   ),
@@ -75,7 +75,7 @@ lazy val shared = crossProject(JSPlatform, JVMPlatform)
       "com.github.benhutchison" %%% "prickle" % "1.1.13",
       "com.thesamet.scalapb" %%% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion,
       "com.thesamet.scalapb" %%% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
-      "org.reactivemongo" %% "reactivemongo" % "0.12.7" % Provided intransitive(),
+      "org.reactivemongo" %% "reactivemongo-bson-macros" % "0.13.0" % Provided intransitive(),
     ),
     PB.targets in Compile := Seq(
       scalapb.gen(grpc=true, flatPackage=true) -> (sourceManaged in Compile).value

@@ -6,7 +6,7 @@ import javax.inject.Inject
 
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import akka.stream.Materializer
-import code.annotation.{JumanppDiffReader, Sentence, SentenceDbo, SessionUser}
+import code.annotation._
 import com.typesafe.scalalogging.StrictLogging
 import play.api.libs.streams.ActorFlow
 import play.api.mvc.{InjectedController, WebSocket}
@@ -23,7 +23,6 @@ class SentenceImportController @Inject()(
 
   def importFilesystem() = WebSocket.acceptOrResult[String, String] { implicit req =>
     //val csrfToken = CSRF.getToken.getOrElse(throw new Exception("Should have CSRF token here"))
-    logger.info(req.session.data.toString())
     SessionUser.getUser(req) match {
       case Some(u) if u.admin =>
         val flow = ActorFlow.actorRef { out =>
@@ -43,15 +42,16 @@ class ImportSocketActor(out: ActorRef, db: SentenceDbo) extends Actor with Stric
   }
 
   import ws.kotonoha.akane.resources.FSPaths._
-  private def importFrom(p: Path): Unit = {
+  private def importFrom(p: Path, tags: Seq[String]): Unit = {
     try {
       val is = Files.newInputStream(p, StandardOpenOption.READ)
       val isr = new InputStreamReader(is, Charsets.utf8)
       val br = new BufferedReader(isr)
-      self ! ImportSocketActor.Read(br)
+      self ! ImportSocketActor.Read(br, tags)
     } catch {
       case e: Exception =>
-        info("failed to read from")
+        info(s"failed to read from: $p")
+        logger.error(s"failed to read from $p", e)
     }
   }
 
@@ -61,7 +61,7 @@ class ImportSocketActor(out: ActorRef, db: SentenceDbo) extends Actor with Stric
     }
   }
 
-  def readFrom(rdr: BufferedReader): Unit = {
+  def readFrom(rdr: BufferedReader, tags: Seq[String]): Unit = {
     val atTime = 50
     val items = try { readItems(rdr, atTime) } catch {
       case e: Exception =>
@@ -78,7 +78,10 @@ class ImportSocketActor(out: ActorRef, db: SentenceDbo) extends Actor with Stric
         for (e <- existing) {
           info(s"ignoring S-ID:$e")
         }
-        val newItems = items.filterNot(item => existing.contains(item.id))
+        val nowTime = Some(Timestamps.now)
+        val newItems = items.filterNot(item => existing.contains(item.id)).map(
+          s => s.copy(importedOn = nowTime, tags = tags)
+        )
         db.saveSentences(newItems)
       }
       .onComplete {
@@ -88,7 +91,7 @@ class ImportSocketActor(out: ActorRef, db: SentenceDbo) extends Actor with Stric
             rdr.close()
             info("finished!")
           } else {
-            self ! ImportSocketActor.Read(rdr)
+            self ! ImportSocketActor.Read(rdr, tags)
           }
         case scala.util.Failure(e) =>
           rdr.close()
@@ -97,14 +100,18 @@ class ImportSocketActor(out: ActorRef, db: SentenceDbo) extends Actor with Stric
   }
 
   override def receive: Receive = {
-    case s: String =>
+    case input: String =>
+      val parts = input.split(",").map(_.trim)
+      val s = parts.head
+      val tags = parts.tail.toSeq
+
       val p = Paths.get(s)
       if (!Files.isReadable(p)) {
         info(s"Can't import from $p")
       } else {
         info(s"Starting to import files from $p")
         try {
-          importFrom(p)
+          importFrom(p, tags)
         } catch {
           case e: Exception =>
             info(s"failed to import from: $p")
@@ -112,11 +119,11 @@ class ImportSocketActor(out: ActorRef, db: SentenceDbo) extends Actor with Stric
             logger.error(s"failed to import from $p", e)
         }
       }
-    case ImportSocketActor.Read(rdr) =>
-      readFrom(rdr)
+    case ImportSocketActor.Read(rdr, tags) =>
+      readFrom(rdr, tags)
   }
 }
 
 object ImportSocketActor {
-  case class Read(rdr: BufferedReader)
+  case class Read(rdr: BufferedReader, tags: Seq[String])
 }

@@ -9,7 +9,7 @@ object SentenceImport {
 
   case class Message(idx: Int, data: String)
 
-  case class ImporterState(messages: Vector[Message], filename: String)
+  case class ImporterState(messages: Vector[Message], filename: String, tags: String)
 
   class ImportBackend(scope: BackendScope[ApiService, ImporterState]) {
 
@@ -35,9 +35,14 @@ object SentenceImport {
       }
     }
 
-    def startImport(filename: String) = Callback {
+    def startImport(filename: String, tags: String) = Callback {
       if (connection != null) {
-        connection.send(filename)
+        val msg = if (tags.isEmpty) {
+          filename
+        } else {
+          s"$filename,$tags"
+        }
+        connection.send(msg)
       }
     }
 
@@ -60,8 +65,11 @@ object SentenceImport {
         <.h1("Importer"),
         Edits.Field(
           ("Filename", StateSnapshot(s.filename)(s => scope.modState(x => x.copy(filename = s))))),
+        Edits.Field((
+          "Tags", StateSnapshot(s.tags)(t => scope.modState(_.copy(tags = t)))
+        )),
         <.button(
-          ^.onClick --> startImport(s.filename),
+          ^.onClick --> startImport(s.filename, s.tags),
           "Import"
         ),
         <.h2("Messages"),
@@ -73,7 +81,7 @@ object SentenceImport {
 
   val Importer = ScalaComponent
     .builder[ApiService]("SentenceImport")
-    .initialState(ImporterState(Vector.empty, ""))
+    .initialState(ImporterState(Vector.empty, "", ""))
     .backend(s => new ImportBackend(s))
     .renderBackend
     .componentDidMount(_.backend.init())

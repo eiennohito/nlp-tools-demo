@@ -3,6 +3,7 @@ syntax = "proto3";
 option java_package = "code.annotation";
 
 import "scalapb/scalapb.proto";
+import "google/protobuf/timestamp.proto";
 
 message ExampleToken {
     string surface = 1;
@@ -15,6 +16,8 @@ message Annotation {
     string annotatorId = 1 [(scalapb.field).type = "code.annotation.ObjId"];
     string value = 2;
     string comment = 3;
+    google.protobuf.Timestamp timestamp = 4;
+    float duration = 5;
 }
 
 message TokenSpan {
@@ -42,6 +45,8 @@ message Sentence {
     repeated string originalComments = 3;
     int32 numAnnotations = 4;
     SentenceStatus status = 5;
+    repeated string tags = 6;
+    google.protobuf.Timestamp importedOn = 7;
 }
 
 message GetSentences {
@@ -67,4 +72,5 @@ message Annotate {
     string annotation = 3;
     string comment = 4;
     string annotatorId = 5 [(scalapb.field).type = "code.annotation.ObjId"];
+    float duration = 6;
 }

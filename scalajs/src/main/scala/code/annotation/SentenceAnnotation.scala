@@ -33,12 +33,13 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
 
   private val api = new SentenceApi(apiSvc, uid)
 
-  case class PageState(stored: List[Sentence] = Nil) {
+  case class PageState(stored: List[Sentence] = Nil, openTimestamp: Long = System.currentTimeMillis()) {
     def currentSentence: Option[Sentence] = stored.headOption
+
     def addSentences(sentences: Seq[Sentence]): PageState = {
       val curIds = ids.toSet
       val nextSentences = stored ++ sentences.filterNot(s => curIds.contains(s.id))
-      PageState(nextSentences)
+      PageState(nextSentences, openTimestamp)
     }
 
     def moveToNext(): PageState = {
@@ -47,7 +48,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
         case _       => Nil
       }
 
-      PageState(nextSentences)
+      PageState(nextSentences, System.currentTimeMillis())
     }
 
     def ids: List[String] = stored.map(_.id)
@@ -55,8 +56,8 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
     def shouldGetNew: Boolean = stored.lengthCompare(5) < 0
   }
 
-  case class SentenceProps(sentence: Sentence, showNext: Callback)
-  case class BlockProps(block: SentenceBlock, id: String)
+  case class SentenceProps(sentence: Sentence, showNext: Callback, showTime: Long)
+  case class BlockProps(block: SentenceBlock, id: String, showTime: Long)
 
   class PageBackend(scope: BackendScope[Unit, PageState]) {
     def init() =
@@ -79,7 +80,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
       state.currentSentence match {
         case None => <.div("No sentences")
         case Some(s) =>
-          SentenceView(SentenceProps(s, scope.modState(_.moveToNext()) >> maybeGetNewSentences()))
+          SentenceView(SentenceProps(s, scope.modState(_.moveToNext()) >> maybeGetNewSentences(), state.openTimestamp))
       }
     }
   }
@@ -109,11 +110,14 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
           str
         }
 
+        val secsEplaced = (System.currentTimeMillis() - p.showTime) / 1000.0f
+
         val annreq = Annotate(
           sentenceId = p.id,
           offset = p.block.offset,
           annotation = annotationValue,
-          annotatorId = uid
+          annotatorId = uid,
+          duration = secsEplaced
         )
 
         api.annotate(annreq)
@@ -256,7 +260,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
         ),
         <.div(
           ^.cls := "parts",
-          s.blocks.map(b => BlockView(BlockProps(b, s.id))).toTagMod
+          s.blocks.map(b => BlockView(BlockProps(b, s.id, state.showTime))).toTagMod
         ),
         <.div(
           ^.cls := "sent-block",

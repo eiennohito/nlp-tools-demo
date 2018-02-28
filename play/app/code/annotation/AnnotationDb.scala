@@ -4,6 +4,7 @@ import java.util.Base64
 import javax.inject.{Inject, Singleton}
 
 import com.google.inject.Provides
+import com.google.protobuf.timestamp.Timestamp
 import net.codingwell.scalaguice.ScalaModule
 import org.apache.commons.lang3.RandomUtils
 import play.api.Configuration
@@ -11,17 +12,7 @@ import play.api.mvc.Result
 import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.api.commands.UpdateWriteResult
 import reactivemongo.api.{Cursor, DefaultDB, MongoConnection}
-import reactivemongo.bson.{
-  BSONArray,
-  BSONDocument,
-  BSONDocumentHandler,
-  BSONHandler,
-  BSONInteger,
-  BSONObjectID,
-  BSONValue,
-  BSONWriter,
-  Macros
-}
+import reactivemongo.bson.{BSONArray, BSONDateTime, BSONDocument, BSONDocumentHandler, BSONDouble, BSONHandler, BSONInteger, BSONObjectID, BSONValue, BSONWriter, Macros}
 import ws.kotonoha.akane.akka.AnalyzerActor.Failure
 import ws.kotonoha.akane.utils.XInt
 
@@ -228,6 +219,25 @@ object SentenceBSON {
       }
     }
 
+  implicit val timestampHandler: BSONHandler[BSONDateTime, Timestamp] =
+    new BSONHandler[BSONDateTime, Timestamp] {
+      override def read(bson: BSONDateTime): Timestamp = {
+        val secs = bson.value / 1000
+        val nanos = (bson.value % 1000).toInt * 1000
+        Timestamp(secs, nanos)
+      }
+      override def write(t: Timestamp): BSONDateTime = {
+        val millis = t.nanos / 1000
+        BSONDateTime(t.seconds * 1000 + millis)
+      }
+    }
+
+  implicit val floatHandler: BSONHandler[BSONDouble, Float] =
+    new BSONHandler[BSONDouble, Float] {
+      override def read(bson: BSONDouble): Float = bson.value.toFloat
+      override def write(t: Float): BSONDouble = BSONDouble(t.toDouble)
+    }
+
   implicit val exampleTokenFormat: BSONDocumentHandler[ExampleToken] = Macros.handler[ExampleToken]
   implicit val annotationFormat: BSONDocumentHandler[Annotation] = Macros.handler[Annotation]
   implicit val tokenSpanFormat: BSONDocumentHandler[TokenSpan] = Macros.handler[TokenSpan]
@@ -306,7 +316,9 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) {
       val newAnnotation = Annotation(
         annotatorId = ObjId(uid.stringify),
         value = req.annotation,
-        comment = req.comment
+        comment = req.comment,
+        duration = req.duration,
+        timestamp = Some(Timestamps.now)
       )
 
       val newAnnotations = annIdx match {
