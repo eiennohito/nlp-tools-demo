@@ -47,7 +47,9 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
 
   private val api = new SentenceApi(apiSvc, uid)
 
-  case class PageState(stored: List[Sentence] = Nil, openTimestamp: Long = System.currentTimeMillis()) {
+  case class PageState(
+      stored: List[Sentence] = Nil,
+      openTimestamp: Long = System.currentTimeMillis()) {
     def currentSentence: Option[Sentence] = stored.headOption
 
     def addSentences(sentences: Seq[Sentence]): PageState = {
@@ -94,7 +96,10 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
       state.currentSentence match {
         case None => <.div("No sentences")
         case Some(s) =>
-          SentenceView(SentenceProps(s, scope.modState(_.moveToNext()) >> maybeGetNewSentences(), state.openTimestamp))
+          SentenceView(
+            SentenceProps(s,
+                          scope.modState(_.moveToNext()) >> maybeGetNewSentences(),
+                          state.openTimestamp))
       }
     }
   }

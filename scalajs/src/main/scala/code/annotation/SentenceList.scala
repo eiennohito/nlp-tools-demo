@@ -7,18 +7,22 @@ import japgolly.scalajs.react.vdom.html_<^._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-case class SentenceList(ctl: RouterCtl[AnnotationPage], apiBackend: ApiService, uid: ObjId, admin: Boolean) {
+case class SentenceList(
+    ctl: RouterCtl[AnnotationPage],
+    apiBackend: ApiService,
+    uid: ObjId,
+    admin: Boolean) {
 
   private val api = new SentenceApi(apiBackend, uid)
 
   case class CachedSentence(data: Sentence, lifetime: Int)
 
   case class ListState(
-    search: String = "",
-    currentIds: Seq[String] = Nil,
-    sentences: Map[String, Sentence] = Map.empty,
-    from: Int = 0,
-    total: Option[Int] = None
+      search: String = "",
+      currentIds: Seq[String] = Nil,
+      sentences: Map[String, Sentence] = Map.empty,
+      from: Int = 0,
+      total: Option[Int] = None
   )
 
   class ListBackend(scope: BackendScope[SentenceListPage, ListState]) {
@@ -50,6 +54,7 @@ case class SentenceList(ctl: RouterCtl[AnnotationPage], apiBackend: ApiService, 
       } else Callback.empty
     }
 
+    def doExportTo(path: String): Callback = Callback.TODO
 
     private def renderTableHeader() = {
       <.thead(
@@ -130,9 +135,12 @@ case class SentenceList(ctl: RouterCtl[AnnotationPage], apiBackend: ApiService, 
     private def renderTableBody(s: ListState) = {
       <.tbody(
         s.currentIds.map { id =>
-          s.sentences.get(id).map { sent =>
-            renderSentence(sent)
-          }.getOrElse(renderEmptyRow(id))
+          s.sentences
+            .get(id)
+            .map { sent =>
+              renderSentence(sent)
+            }
+            .getOrElse(renderEmptyRow(id))
         }.toVdomArray
       )
     }
@@ -141,13 +149,14 @@ case class SentenceList(ctl: RouterCtl[AnnotationPage], apiBackend: ApiService, 
       <.div(
         ^.cls := "search-form",
         <.form(
-          Edits.Field(("", StateSnapshot(query)(s => scope.modState(_.copy(search=s))))),
+          Edits.Field(("", StateSnapshot(query)(s => scope.modState(_.copy(search = s))))),
           <.input.submit(
             ctl.setOnClick(SentenceListPage(query, skip)),
             ^.value := "Search"
           ),
           ^.onSubmit --> CallbackTo(false)
-        )
+        ),
+        Export(this).when(admin)
       )
     }
 
@@ -166,15 +175,33 @@ case class SentenceList(ctl: RouterCtl[AnnotationPage], apiBackend: ApiService, 
     }
   }
 
-  val Page = ScalaComponent.builder[SentenceListPage]("SentenceList")
-      .initialStateFromProps(p => ListState(search = p.search, from = p.skip))
-      .backend(b => new ListBackend(b))
-      .renderBackend
-      .componentDidMount(_.backend.init())
-      .componentWillReceiveProps { ev =>
-        ev.backend.updateSearch(ev.state, ev.nextProps)
-      }
-      .build
+  val Export = ScalaComponent
+    .builder[ListBackend]("Export")
+    .initialState("")
+    .noBackend
+    .render { ctx =>
+      <.form(
+        Edits.Field(("", StateSnapshot(ctx.state)(x => ctx.setState(x)))),
+        <.input.submit(
+          ^.onClick --> ctx.props.doExportTo(ctx.state),
+          ^.value := "Export"
+        ),
+        ^.onSubmit ==> { e =>
+          e.preventDefault(); CallbackTo(false)
+        }
+      )
+    }
+    .build
 
+  val Page = ScalaComponent
+    .builder[SentenceListPage]("SentenceList")
+    .initialStateFromProps(p => ListState(search = p.search, from = p.skip))
+    .backend(b => new ListBackend(b))
+    .renderBackend
+    .componentDidMount(_.backend.init())
+    .componentWillReceiveProps { ev =>
+      ev.backend.updateSearch(ev.state, ev.nextProps)
+    }
+    .build
 
 }

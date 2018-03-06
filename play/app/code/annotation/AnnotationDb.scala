@@ -3,6 +3,8 @@ package code.annotation
 import java.util.Base64
 import javax.inject.{Inject, Singleton}
 
+import akka.NotUsed
+import akka.stream.scaladsl.Source
 import com.google.inject.Provides
 import com.google.protobuf.timestamp.Timestamp
 import com.typesafe.scalalogging.StrictLogging
@@ -13,7 +15,23 @@ import play.api.mvc.Result
 import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.api.commands.UpdateWriteResult
 import reactivemongo.api.{Cursor, DefaultDB, MongoConnection}
-import reactivemongo.bson.{BSONArray, BSONDateTime, BSONDocument, BSONDocumentHandler, BSONDouble, BSONElement, BSONHandler, BSONInteger, BSONNumberLike, BSONObjectID, BSONRegex, BSONValue, BSONWriter, Macros, Producer}
+import reactivemongo.bson.{
+  BSONArray,
+  BSONDateTime,
+  BSONDocument,
+  BSONDocumentHandler,
+  BSONDouble,
+  BSONElement,
+  BSONHandler,
+  BSONInteger,
+  BSONNumberLike,
+  BSONObjectID,
+  BSONRegex,
+  BSONValue,
+  BSONWriter,
+  Macros,
+  Producer
+}
 import ws.kotonoha.akane.akka.AnalyzerActor.Failure
 import ws.kotonoha.akane.utils.XInt
 
@@ -278,40 +296,50 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
     coll.insert[Sentence](ordered = false).many(data).map(_.totalN)
   }
 
-  private def convertCommonStatus(doc: BSONDocument, status: String, uid: BSONObjectID): BSONDocument = {
+  private def convertCommonStatus(
+      doc: BSONDocument,
+      status: String,
+      uid: BSONObjectID): BSONDocument = {
     import BSONElement.converted
     status match {
-      case "new" => doc.merge(
-        "status" -> SentenceStatus.NotAnnotated.value
-      )
-      case "ok" => doc.merge(
-        "blocks.annotations.annotatorId" -> BSONDocument(
-          "$ne" -> uid
+      case "new" =>
+        doc.merge(
+          "status" -> SentenceStatus.NotAnnotated.value
         )
-      )
+      case "ok" =>
+        doc.merge(
+          "blocks.annotations.annotatorId" -> BSONDocument(
+            "$ne" -> uid
+          )
+        )
       case _ => doc
     }
   }
 
   private def convertAdminStatus(doc: BSONDocument, status: String): BSONDocument = {
     status match {
-      case "new" | "na" => doc.merge(
-        "status" -> SentenceStatus.NotAnnotated.value
-      )
-      case "ok" | "ta" => doc.merge(
-        "status" -> SentenceStatus.TotalAgreement.value
-      )
-      case "pa" => doc.merge(
-        "status" -> SentenceStatus.PartialAgreement.value
-      )
-      case "wr" => doc.merge(
-        "status" -> SentenceStatus.WorkRequired.value
-      )
-      case "bad" | "ng" => doc.merge(
-        "status" -> BSONDocument(
-          "$ge" -> SentenceStatus.PartialAgreement.value
+      case "new" | "na" =>
+        doc.merge(
+          "status" -> SentenceStatus.NotAnnotated.value
         )
-      )
+      case "ok" | "ta" =>
+        doc.merge(
+          "status" -> SentenceStatus.TotalAgreement.value
+        )
+      case "pa" =>
+        doc.merge(
+          "status" -> SentenceStatus.PartialAgreement.value
+        )
+      case "wr" =>
+        doc.merge(
+          "status" -> SentenceStatus.WorkRequired.value
+        )
+      case "bad" | "ng" =>
+        doc.merge(
+          "status" -> BSONDocument(
+            "$ge" -> SentenceStatus.PartialAgreement.value
+          )
+        )
       case _ =>
         logger.warn(s"unsupported admin status: $status")
         doc
@@ -322,31 +350,47 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
     if (str.isEmpty) return BSONDocument.empty
 
     val parts = str.split("[ 　]+") //either half or full width whitespace
-    parts.foldLeft(BSONDocument.empty) { case (doc, p) =>
-      p.split("[:：]", 2) match {
-        case Array(word) =>
-          doc.merge("blocks.spans.tokens.surface" -> BSONRegex(
-            s"^\\Q$word\\E", ""
-          ))
-        case Array(key, value) =>
-          key match {
-            case "t" | "tag" | "ｔ" => // tags
-              doc.merge("tags" -> value)
-            case "is" =>
-              if (user.admin) convertAdminStatus(doc, value) else convertCommonStatus(doc, value, user._id)
-            case "ann" | "ａｎｎ" =>
-              doc.merge(
-                "blocks.annotations.value" -> value
-              )
-            case _ =>
-              logger.warn(s"unsupported kv query part: [$key]:[$value]")
-              doc
-          }
-        case _ =>
-          logger.warn(s"unsupported query part: [$p]")
-          doc
-      }
+    parts.foldLeft(BSONDocument.empty) {
+      case (doc, p) =>
+        p.split("[:：]", 2) match {
+          case Array(word) =>
+            doc.merge(
+              "blocks.spans.tokens.surface" -> BSONRegex(
+                s"^\\Q$word\\E",
+                ""
+              ))
+          case Array(key, value) =>
+            key match {
+              case "t" | "tag" | "ｔ" => // tags
+                doc.merge("tags" -> value)
+              case "is" =>
+                if (user.admin) convertAdminStatus(doc, value)
+                else convertCommonStatus(doc, value, user._id)
+              case "ann" | "ａｎｎ" =>
+                doc.merge(
+                  "blocks.annotations.value" -> value
+                )
+              case _ =>
+                logger.warn(s"unsupported kv query part: [$key]:[$value]")
+                doc
+            }
+          case _ =>
+            logger.warn(s"unsupported query part: [$p]")
+            doc
+        }
     }
+  }
+
+  def stream(user: AnnotationToolUser, query: String): Source[Sentence, NotUsed] = {
+    val sort = BSONDocument(
+      "_id" -> 1
+    )
+
+    val q = parseQuery(query, user)
+
+    import MongoStream._
+
+    coll.find(q).sort(sort).stream[Sentence]()
   }
 
   def getSentences(user: AnnotationToolUser, req: GetSentences): Future[Sentences] = {
@@ -377,7 +421,6 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
     )
 
     logger.debug(s"search=${BSONDocument.pretty(q)}")
-
 
     val itemCount = coll.count(Some(q))
 

@@ -16,12 +16,13 @@ GET         /atool                        controllers.Annotation.default()
 POST        /atool                        controllers.Annotation.handleLogin()
 GET         /atool/logout                 controllers.Annotation.logout()
 GET         /atool/api                    controllers.AnnotationApi.root()
+GET         /atool/export                 controllers.SentenceExport.download(da: controllers.DownloadArgs)
 
-POST /atool/api/sentences controllers.SentenceApiController.handler()
+POST        /atool/api/sentences          controllers.SentenceApiController.handler()
 POST        /atool/api/users              controllers.AnnotationUsersApiController.handler()
 GET         /atool/api/user               controllers.AnnotationUsersApiController.user()
 
-GET /atool/api/importws controllers.SentenceImportController.importFilesystem()
+GET         /atool/api/importws           controllers.SentenceImportController.importFilesystem()
 
 # Map static resources from the /public folder to the /assets URL path
 GET         /assets/*file                 controllers.Assets.at(path="/public", file)

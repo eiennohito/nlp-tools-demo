@@ -79,9 +79,11 @@ class ImportSocketActor(out: ActorRef, db: SentenceDbo) extends Actor with Stric
           info(s"ignoring S-ID:$e")
         }
         val nowTime = Some(Timestamps.now)
-        val newItems = items.filterNot(item => existing.contains(item.id)).map(
-          s => s.copy(importedOn = nowTime, tags = tags)
-        )
+        val newItems = items
+          .filterNot(item => existing.contains(item.id))
+          .map(
+            s => s.copy(importedOn = nowTime, tags = tags)
+          )
         db.saveSentences(newItems)
       }
       .onComplete {

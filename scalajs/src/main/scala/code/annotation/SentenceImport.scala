@@ -65,9 +65,11 @@ object SentenceImport {
         <.h1("Importer"),
         Edits.Field(
           ("Filename", StateSnapshot(s.filename)(s => scope.modState(x => x.copy(filename = s))))),
-        Edits.Field((
-          "Tags", StateSnapshot(s.tags)(t => scope.modState(_.copy(tags = t)))
-        )),
+        Edits.Field(
+          (
+            "Tags",
+            StateSnapshot(s.tags)(t => scope.modState(_.copy(tags = t)))
+          )),
         <.button(
           ^.onClick --> startImport(s.filename, s.tags),
           "Import"
