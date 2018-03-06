@@ -161,7 +161,7 @@ class AnnotationAuth(db: AnnotationDb)(implicit ec: ExecutionContext) {
       .find(BSONDocument())
       .sort(BSONDocument("name" -> 1))
       .cursor[AnnotationToolUser]()
-      .collect[Vector](0, Cursor.FailOnError[Vector[AnnotationToolUser]]())
+      .collect[Vector](-1, Cursor.FailOnError[Vector[AnnotationToolUser]]())
       .map { users =>
         AllUsers(
           users.map { u =>
