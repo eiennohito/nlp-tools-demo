@@ -42,7 +42,7 @@ object AnnotationTool {
 
     val (router, ctl) = Router.componentAndCtl(baseUrl, routerConfig(apisvc, isAdmin, ObjId(uid)))
 
-    val wrapper = Wrapper.AnnotationPageWrap(ctl)
+    val wrapper = Wrapper.AnnotationPageWrap(isAdmin, ctl)
     wrapper(router()).renderIntoDOM(elem)
   }
 
@@ -65,7 +65,7 @@ object AnnotationTool {
         }) ~> { obj => renderR(ctl => SentenceList(ctl, as, uid, isAdmin).Page(obj)) }
 
       (
-        staticRoute(root, LandingPage) ~> render(Edits.Todo())
+        staticRoute(root, LandingPage) ~> render(Edits.Landing())
           | staticRoute("#userInfo", UserInfo) ~> render(Edits.UserDisplay())
           | staticRoute("#import", Import) ~> render(SentenceImport.Importer(as))
           | staticRoute("#annotate", AnnotatePage) ~> render(SentenceAnnotation(as, uid).Page())

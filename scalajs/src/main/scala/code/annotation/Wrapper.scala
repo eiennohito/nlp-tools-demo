@@ -6,11 +6,11 @@ import japgolly.scalajs.react.extra.router.RouterCtl
 
 object Wrapper {
 
-  def AnnotationPageWrap(ctl: RouterCtl[AnnotationPage]) =
+  def AnnotationPageWrap(isAdmin: Boolean, ctl: RouterCtl[AnnotationPage]) =
     ScalaComponent
       .builder[Unit]("PageWrap")
       .stateless
-      .render_C { pc =>
+      .render_C { (children) =>
         <.div(
           ^.cls := "container",
           <.div(
@@ -19,17 +19,23 @@ object Wrapper {
               ^.cls := "nav-bar",
               <.li(ctl.link(AnnotatePage)("Annotate")),
               <.li(ctl.link(SentenceListPage("", 0))("Sentences")),
-              <.li(ctl.link(Users)("Users")),
-              <.li(ctl.link(Import)("Import"))
+              <.li(ctl.link(Users)("Users")).when(isAdmin),
+              <.li(ctl.link(Import)("Import")).when(isAdmin)
             ),
-            <.div(
-              ^.cls := "user-badge",
-              ctl.link(UserInfo)("Profile")
+            <.ul(
+              ^.cls := "nav-bar",
+              <.li(ctl.link(UserInfo)("Profile")),
+              <.li(
+                <.a(
+                  ^.href := "./atool/logout",
+                  "Logout"
+                )
+              )
             )
           ),
           <.div(
             ^.cls := "content",
-            pc
+            children
           )
         )
       }

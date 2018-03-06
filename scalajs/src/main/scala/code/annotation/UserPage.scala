@@ -52,6 +52,10 @@ object Edits {
     .build
 
   val Todo = ScalaComponent.static("TODO")(<.div("TODO"))
+
+  val Landing = ScalaComponent.static("Landing") {
+    <.p("Welcome to the annotation tool. Try to annotate some sentences.")
+  }
 }
 
 object Futures {
