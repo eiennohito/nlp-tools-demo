@@ -30,16 +30,7 @@ object AnnotationTool {
       } else s
     }
 
-    //org.scalajs.dom.console.log(s"Base URL: $baseUrl")
-
     val apisvc = new ApiService(url, csrfToken)
-    apisvc.user().onComplete {
-      case scala.util.Success(u) =>
-        org.scalajs.dom.console.log(u.toString)
-      case scala.util.Failure(f) =>
-        f.printStackTrace()
-    }
-
     val (router, ctl) = Router.componentAndCtl(baseUrl, routerConfig(apisvc, isAdmin, ObjId(uid)))
 
     val wrapper = Wrapper.AnnotationPageWrap(isAdmin, ctl)
@@ -69,7 +60,7 @@ object AnnotationTool {
 
       (
         staticRoute(root, LandingPage) ~> render(Edits.Landing())
-          | staticRoute("#userInfo", UserInfo) ~> render(Edits.UserDisplay())
+          | staticRoute("#userInfo", UserInfo) ~> render(UserPage(as).UserDisplay())
           | staticRoute("#import", Import) ~> render(SentenceImport.Importer(as))
           | staticRoute("#annotate", AnnotatePage) ~> render(SentenceAnnotation(as, uid).Page())
           | sentenceList

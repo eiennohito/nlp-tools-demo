@@ -1,5 +1,6 @@
 package code.annotation
 
+import code.annotation.Edits.Field
 import japgolly.scalajs.react._
 import japgolly.scalajs.react.component.builder.Lifecycle.StateRW
 import japgolly.scalajs.react.extra.StateSnapshot
@@ -8,16 +9,47 @@ import japgolly.scalajs.react.vdom.html_<^._
 import scala.concurrent.Future
 import scala.scalajs.concurrent.JSExecutionContext.Implicits.queue
 
-object UserPage {
-  val Control = ScalaComponent
-    .builder[Unit]("User")
-    .stateless
-    .render(_ => <.div("TODO"))
+case class UserPage(apisvc: ApiService) {
+
+  class UserBackend(scope: BackendScope[Unit, AnnotationUser]) {
+    def load() = Callback.future {
+      val user = apisvc.user()
+      user.map { u =>
+        scope.setState(u)
+      }
+    }
+
+    def save(value: CallbackTo[AnnotationUser]) = {
+      value.flatMap { u =>
+        val f = apisvc.updateUser(u).map(u => scope.setState(u))
+        Callback.future(f)
+      }
+    }
+
+    def render() = {
+      import Lenses._
+
+      <.div(
+        Field(("Username", scope.zoom(_.name))),
+        Field(("Token", scope.zoom(_.token))),
+        <.button(
+          ^.onClick --> save(scope.state),
+          ^.title := "Save"
+        )
+      )
+    }
+  }
+
+  val UserDisplay = ScalaComponent
+    .builder[Unit]("AnnotationUser")
+    .initialState(AnnotationUser())
+    .backend(bs => new UserBackend(bs))
+    .renderBackend
+    .componentDidMount(_.backend.load())
     .build
 }
 
 object Edits {
-  import Lenses._
 
   val Field = ScalaComponent
     .builder[(String, StateSnapshot[String])]("Field")
@@ -37,17 +69,6 @@ object Edits {
             ^.onChange ==> ((e: ReactEventFromInput) => state.setState(e.target.value))
           )
         )
-    }
-    .build
-
-  val UserDisplay = ScalaComponent
-    .builder[Unit]("AnnotationUser")
-    .initialState(AnnotationUser())
-    .render { scope =>
-      <.div(
-        Field(("Username", scope.zoom(_.name))),
-        Field(("Token", scope.zoom(_.token)))
-      )
     }
     .build
 
@@ -107,6 +128,14 @@ object Lenses {
       val l = f(scalapb.lenses.Lens.unit[T])
       val modify: (T => T) => Callback = fn => s.modState(fn)
       StateSnapshot.zoom[T, R](l.get)(l.set).apply(s.state).apply(modify)
+    }
+  }
+
+  implicit class BackendScopeSupport[T](val s: BackendScope[_, T]) extends AnyVal {
+    def zoom[R](f: scalapb.lenses.Lens[T, T] => scalapb.lenses.Lens[T, R]): StateSnapshot[R] = {
+      val l = f(scalapb.lenses.Lens.unit[T])
+      val modify: (T => T) => Callback = fn => s.modState(fn)
+      StateSnapshot.zoom[T, R](l.get)(l.set).apply(s.state.runNow()).apply(modify)
     }
   }
 }

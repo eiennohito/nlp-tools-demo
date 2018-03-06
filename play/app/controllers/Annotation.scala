@@ -163,14 +163,34 @@ class AnnotationUsersApiController @Inject()(
     req.attrs.get(SessionUser.User) match {
       case None => Unauthorized("No user")
       case Some(u) =>
-        val pbUser = AnnotationUser(
-          id = u._id.stringify,
-          name = u.name,
-          token = u.token,
-          admin = u.admin
-        )
+        val pbUser = AnnotationUsers.toPb(u)
         Ok(LiftPB(pbUser))
     }
   }
 
+  def updateUser() = Action.async(LiftPB.protoBodyParser[AnnotationUser]) { implicit req =>
+    req.attrs.get(SessionUser.User) match {
+      case Some(u) if u._id.stringify == req.body.id =>
+        auth.updateUser(req.body).map { newUser =>
+          val userData = prickle.Pickle.intoString(newUser)
+          Ok(LiftPB(AnnotationUsers.toPb(newUser))).withSession(
+            SessionUser.SessionKey -> userData
+          )
+        }
+      case None => Future.successful(Unauthorized("No user"))
+    }
+  }
+
+}
+
+
+object AnnotationUsers {
+  def toPb(u: AnnotationToolUser): AnnotationUser = {
+    AnnotationUser(
+      id = u._id.stringify,
+      name = u.name,
+      token = u.token,
+      admin = u.admin
+    )
+  }
 }

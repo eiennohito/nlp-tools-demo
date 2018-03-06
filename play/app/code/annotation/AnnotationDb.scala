@@ -32,7 +32,7 @@ import reactivemongo.bson.{
   Macros,
   Producer
 }
-import ws.kotonoha.akane.akka.AnalyzerActor.Failure
+
 import ws.kotonoha.akane.utils.XInt
 
 import scala.collection.mutable
@@ -134,6 +134,7 @@ case class AnnotationToolUser(
 
 class AnnotationAuth(db: AnnotationDb)(implicit ec: ExecutionContext) {
 
+
   private val coll = db.db.collection[BSONCollection]("users")
 
   def addUser(name: String): Future[Unit] = {
@@ -154,6 +155,22 @@ class AnnotationAuth(db: AnnotationDb)(implicit ec: ExecutionContext) {
       )
     )
     coll.update(q, upd).map(_ => ())
+  }
+
+  def updateUser(u: AnnotationUser): Future[AnnotationToolUser] = {
+    val id = BSONObjectID.parse(u.id)
+    id match {
+      case scala.util.Failure(ex) => Future.failed(ex)
+      case scala.util.Success(uid) =>
+        val q = BSONDocument("_id" -> uid)
+        val upd = BSONDocument(
+          "$set" -> BSONDocument(
+            "token" -> u.token,
+            "name" -> u.name
+          )
+        )
+        coll.findAndUpdate(q, upd, fetchNewObject = true).map(_.result[AnnotationToolUser].get)
+    }
   }
 
   def allUsers(): Future[AllUsers] = {

@@ -21,6 +21,7 @@ GET         /atool/export                 controllers.SentenceExport.download(da
 POST        /atool/api/sentences          controllers.SentenceApiController.handler()
 POST        /atool/api/users              controllers.AnnotationUsersApiController.handler()
 GET         /atool/api/user               controllers.AnnotationUsersApiController.user()
+POST         /atool/api/user               controllers.AnnotationUsersApiController.updateUser()
 
 GET         /atool/api/importws           controllers.SentenceImportController.importFilesystem()
 

@@ -146,6 +146,32 @@ class ApiService(apiUrl: String, csrfToken: String)(implicit ec: ExecutionContex
       }
   }
 
+  def updateUser(user: AnnotationUser): Future[AnnotationUser] = {
+    import scala.scalajs.js.typedarray._
+    val requestPath = s"$apiUrl/user"
+    val obj = user.toByteArray
+    val u8arr = obj.toTypedArray
+    val src: BufferSource = u8arr
+    Fetch
+      .fetch(requestPath,
+        RequestInit(
+        credentials = RequestCredentials.include,
+        method = HttpMethod.POST,
+        headers = Dictionary.apply(
+          "Content-Type" -> "application/x-protobuf",
+          "Csrf-Token" -> csrfToken
+        ),
+        body = src
+      ))
+      .toFuture
+      .flatMap { resp =>
+        resp.arrayBuffer().toFuture.map { ab =>
+          val buf = new Int8Array(ab)
+          AnnotationUser.parseFrom(new JsTypedArrayInputStream(buf))
+        }
+      }
+  }
+
   def importWsCall(onMessage: String => Unit): WebSocket = {
     val wsUrl = apiUrl.replaceFirst("http", "ws")
     var fullUrl = s"$wsUrl/importws"
