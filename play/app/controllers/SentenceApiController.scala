@@ -16,7 +16,7 @@ class SentenceApiController @Inject()(
   def doHandle(body: SentenceRequest, user: AnnotationToolUser): Future[Result] = {
     body.request match {
       case SentenceRequest.Request.Sentences(sents) =>
-        dbo.getSentences(user._id, sents).map(sents => Ok(LiftPB(Sentences(sents))))
+        dbo.getSentences(user, sents).map(sents => Ok(LiftPB(sents)))
       case SentenceRequest.Request.Annotate(obj) =>
         val uid = if (user.admin) {
           BSONObjectID.parse(obj.annotatorId.id).getOrElse(user._id)

@@ -5,6 +5,7 @@ import javax.inject.{Inject, Singleton}
 
 import com.google.inject.Provides
 import com.google.protobuf.timestamp.Timestamp
+import com.typesafe.scalalogging.StrictLogging
 import net.codingwell.scalaguice.ScalaModule
 import org.apache.commons.lang3.RandomUtils
 import play.api.Configuration
@@ -12,12 +13,13 @@ import play.api.mvc.Result
 import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.api.commands.UpdateWriteResult
 import reactivemongo.api.{Cursor, DefaultDB, MongoConnection}
-import reactivemongo.bson.{BSONArray, BSONDateTime, BSONDocument, BSONDocumentHandler, BSONDouble, BSONHandler, BSONInteger, BSONObjectID, BSONValue, BSONWriter, Macros}
+import reactivemongo.bson.{BSONArray, BSONDateTime, BSONDocument, BSONDocumentHandler, BSONDouble, BSONElement, BSONHandler, BSONInteger, BSONNumberLike, BSONObjectID, BSONRegex, BSONValue, BSONWriter, Macros, Producer}
 import ws.kotonoha.akane.akka.AnalyzerActor.Failure
 import ws.kotonoha.akane.utils.XInt
 
 import scala.collection.mutable
 import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.util.matching.Regex
 import scala.util.{Success, Try}
 import scalapb.{GeneratedEnum, GeneratedEnumCompanion}
 
@@ -246,7 +248,7 @@ object SentenceBSON {
   implicit val sentenceFormat: BSONDocumentHandler[Sentence] = Macros.handler[Sentence]
 }
 
-class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) {
+class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) extends StrictLogging {
 
   private val coll = db.db.collection[BSONCollection]("sentences")
 
@@ -276,21 +278,97 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) {
     coll.insert[Sentence](ordered = false).many(data).map(_.totalN)
   }
 
-  def getSentences(uid: BSONObjectID, req: GetSentences): Future[Seq[Sentence]] = {
-    var q = BSONDocument(
-      "_id" -> BSONDocument(
-        "$nin" -> req.exceptIds
+  private def convertCommonStatus(doc: BSONDocument, status: String, uid: BSONObjectID): BSONDocument = {
+    import BSONElement.converted
+    status match {
+      case "new" => doc.merge(
+        "status" -> SentenceStatus.NotAnnotated.value
       )
-    )
-
-    if (req.newForUser) {
-      val newq = BSONDocument(
+      case "ok" => doc.merge(
         "blocks.annotations.annotatorId" -> BSONDocument(
           "$ne" -> uid
         )
       )
-      q = q.merge(newq)
+      case _ => doc
     }
+  }
+
+  private def convertAdminStatus(doc: BSONDocument, status: String): BSONDocument = {
+    status match {
+      case "new" | "na" => doc.merge(
+        "status" -> SentenceStatus.NotAnnotated.value
+      )
+      case "ok" | "ta" => doc.merge(
+        "status" -> SentenceStatus.TotalAgreement.value
+      )
+      case "pa" => doc.merge(
+        "status" -> SentenceStatus.PartialAgreement.value
+      )
+      case "wr" => doc.merge(
+        "status" -> SentenceStatus.WorkRequired.value
+      )
+      case "bad" | "ng" => doc.merge(
+        "status" -> BSONDocument(
+          "$ge" -> SentenceStatus.PartialAgreement.value
+        )
+      )
+      case _ =>
+        logger.warn(s"unsupported admin status: $status")
+        doc
+    }
+  }
+
+  def parseQuery(str: String, user: AnnotationToolUser): BSONDocument = {
+    if (str.isEmpty) return BSONDocument.empty
+
+    val parts = str.split("[ 　]+") //either half or full width whitespace
+    parts.foldLeft(BSONDocument.empty) { case (doc, p) =>
+      p.split("[:：]", 2) match {
+        case Array(word) =>
+          doc.merge("blocks.spans.tokens.surface" -> BSONRegex(
+            s"^\\Q$word\\E", ""
+          ))
+        case Array(key, value) =>
+          key match {
+            case "t" | "tag" | "ｔ" => // tags
+              doc.merge("tags" -> value)
+            case "is" =>
+              if (user.admin) convertAdminStatus(doc, value) else convertCommonStatus(doc, value, user._id)
+            case "ann" | "ａｎｎ" =>
+              doc.merge(
+                "blocks.annotations.value" -> value
+              )
+            case _ =>
+              logger.warn(s"unsupported kv query part: [$key]:[$value]")
+              doc
+          }
+        case _ =>
+          logger.warn(s"unsupported query part: [$p]")
+          doc
+      }
+    }
+  }
+
+  def getSentences(user: AnnotationToolUser, req: GetSentences): Future[Sentences] = {
+    var q = BSONDocument.empty
+
+    if (req.exceptIds.nonEmpty) {
+      q = q.merge(
+        "_id" -> BSONDocument(
+          "$nin" -> req.exceptIds
+        )
+      )
+    }
+
+    if (req.newForUser) {
+      q = q.merge(
+        "blocks.annotations.annotatorId" -> BSONDocument(
+          "$ne" -> user._id
+        )
+      )
+    }
+
+    q = q.merge(parseQuery(req.query, user))
 
     val max = if (req.limit == 0) 15 else req.limit
 
@@ -298,7 +376,18 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) {
       "_id" -> 1
     )
 
-    coll.find(q).sort(sort).cursor[Sentence]().collect(max, Cursor.FailOnError[Seq[Sentence]]())
+    logger.debug(s"search=${BSONDocument.pretty(q)}")
+
+
+    val itemCount = coll.count(Some(q))
+
+    val cursor = coll.find(q).skip(req.from).sort(sort).cursor[Sentence]()
+    val items = cursor.collect(max, Cursor.FailOnError[Seq[Sentence]]())
+
+    for {
+      cnt <- itemCount
+      data <- items
+    } yield Sentences(data, cnt)
   }
 
   def annotate(req: Annotate, uid: BSONObjectID): Future[Annotation] = {

@@ -15,10 +15,17 @@ object Wrapper {
           ^.cls := "container",
           <.div(
             ^.cls := "header",
-            ctl.link(UserInfo)("User"),
-            ctl.link(AnnotatePage)("Annotate"),
-            ctl.link(Users)("Users"),
-            ctl.link(Import)("Import")
+            <.ul(
+              ^.cls := "nav-bar",
+              <.li(ctl.link(AnnotatePage)("Annotate")),
+              <.li(ctl.link(SentenceListPage("", 0))("Sentences")),
+              <.li(ctl.link(Users)("Users")),
+              <.li(ctl.link(Import)("Import"))
+            ),
+            <.div(
+              ^.cls := "user-badge",
+              ctl.link(UserInfo)("Profile")
+            )
           ),
           <.div(
             ^.cls := "content",

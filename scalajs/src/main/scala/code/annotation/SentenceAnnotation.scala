@@ -27,6 +27,20 @@ class SentenceApi(api: ApiService, uid: ObjId) {
     )
     api.sentenceCall[Annotation](req)
   }
+
+  def findSentences(query: String, from: Int, limit: Int): Future[Sentences] = {
+    val msg = GetSentences(
+      limit = limit,
+      from = from,
+      query = query
+    )
+
+    val call = SentenceRequest(
+      SentenceRequest.Request.Sentences(msg)
+    )
+
+    api.sentenceCall[Sentences](call)
+  }
 }
 
 case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
@@ -185,9 +199,10 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
     def renderOther(annotation: Annotation) = {
       val otherOptions = Seq(
         "両方間違い",
-        "辞書漏れ",
-        "文法漏れ",
-        "入力：誤字脱字"
+        "入力：誤字脱字",
+        "入力：意味不明",
+        "どうでもいい",
+        "わからない"
       )
 
       <.div(

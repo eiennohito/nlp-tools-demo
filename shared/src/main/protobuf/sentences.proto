@@ -53,6 +53,8 @@ message GetSentences {
     repeated string exceptIds = 1;
     int32 limit = 2;
     bool newForUser = 3;
+    string query = 4;
+    int32 from = 5;
 }
 
 message SentenceRequest {
@@ -64,6 +66,7 @@ message SentenceRequest {
 
 message Sentences {
     repeated Sentence sentences = 1;
+    int32 total = 2;
 }
 
 message Annotate {
