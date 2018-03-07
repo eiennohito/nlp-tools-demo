@@ -20,7 +20,7 @@ lazy val playserver = (project in file("play")).settings(
   packageSummary in Linux := "NLP tools demo app",
   packageDescription := "NLP tools demo app",
   serverLoading in Debian := Some(ServerLoader.Systemd)
-).enablePlugins(PlayScala, DebianPlugin).
+).enablePlugins(PlayScala, PlayAkkaHttp2Support, DebianPlugin).
   aggregate(clients.map(projectToRef): _*).
   dependsOn(sharedJvm, `akane-knp-akka`, `akane-testkit` % Test)
   .settings(
