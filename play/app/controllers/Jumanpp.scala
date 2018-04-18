@@ -64,7 +64,7 @@ class Jumanpp @Inject()(
     )
 
     mwork.save(anal).failed.foreach {
-      case e: Exception => logger.warn(s"could not save analysis results for input: $txt", e)
+      case e: Exception => logger.warn(s"could not save code.analysis results for input: $txt", e)
     }
   }
 
@@ -113,9 +113,9 @@ object JumanppConversion {
           n.nodeId,
           n.startIndex,
           n.surface,
-          n.canonic,
+          n.canonical,
           n.reading,
-          n.midasi,
+          n.dicform,
           pos.name,
           subpos.name,
           ctype.name,
@@ -125,12 +125,12 @@ object JumanppConversion {
           po.category,
           po.conjugation,
           n.prevNodes,
-          n.rank,
+          n.ranks,
           features,
           NodeScores(
-            n.featureScore,
-            n.lmScore,
-            n.morphAnalysisScore
+            n.cumulativeScores.headOption.getOrElse(Float.NaN),
+            n.scoreDetails.headOption.map(_.linear).getOrElse(Float.NaN),
+            n.scoreDetails.flatMap(_.additional).headOption.getOrElse(Float.NaN)
           )
         )
       },

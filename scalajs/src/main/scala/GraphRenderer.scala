@@ -128,7 +128,7 @@ object GraphRenderer {
         sobj.features.formatted("Feat: %.3e")
       ),
       div(
-        `class` := "morph-analysis",
+        `class` := "morph-code.analysis",
         sobj.morphAnalysis.formatted("MA: %.3e")
       )
     )

@@ -1,6 +1,7 @@
 package code
 
 import code.annotation.AnnotationDbModule
+import code.grpc.LatticeDumpJppModule
 import com.google.inject.{Binder, Module}
 
 /**
@@ -12,5 +13,6 @@ class MainModule extends Module {
     binder.install(new JumanppModule)
     binder.install(new MongoModule)
     binder.install(new AnnotationDbModule)
+    binder.install(new LatticeDumpJppModule)
   }
 }

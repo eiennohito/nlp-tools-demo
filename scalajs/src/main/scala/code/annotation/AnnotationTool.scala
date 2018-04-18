@@ -1,5 +1,9 @@
 package code.annotation
 
+import java.util.Base64
+
+import code.analysis.PartialAnalysis
+import code.transport.lattice.EditableSentence
 import japgolly.scalajs.react.extra.router.{BaseUrl, Path, Redirect, Router, RouterConfigDsl}
 import org.scalajs.dom.Element
 
@@ -13,6 +17,7 @@ case object UserInfo extends AnnotationPage
 case object Users extends AnnotationPage
 case object Import extends AnnotationPage
 case object AnnotatePage extends AnnotationPage
+case class PartialAnalysisEditor(state: EditableSentence = EditableSentence.defaultInstance) extends AnnotationPage
 case class SentenceListPage(search: String, skip: Int) extends AnnotationPage
 
 @JSExportTopLevel("AnnotationTool")
@@ -58,12 +63,29 @@ object AnnotationTool {
           renderR(ctl => SentenceList(ctl, as, uid, isAdmin).Page(obj))
         }
 
+      def partialAnalysis: dsl.Rule =
+        dynamicRouteCT[PartialAnalysisEditor](
+          "#pana" ~ ("?state=" ~ remainingPathOrBlank).option.xmap({
+            case None => PartialAnalysisEditor()
+            case Some(s) => try {
+              val bytes = Base64.getUrlDecoder.decode(s)
+              PartialAnalysisEditor(EditableSentence.parseFrom(bytes))
+            } catch {
+              case e: Exception => PartialAnalysisEditor()
+            }
+          }){ editor =>
+            val es = editor.state
+            if (es.serializedSize == 0) None else Some(Base64.getUrlEncoder.encodeToString(es.toByteArray))}) ~> {
+          obj => renderR(ctl => PartialAnalysis(as).PartialAnalyser((obj.state, ctl)))
+        }
+
       (
         staticRoute(root, LandingPage) ~> render(Edits.Landing())
           | staticRoute("#userInfo", UserInfo) ~> render(UserPage(as).UserDisplay())
           | staticRoute("#import", Import) ~> render(SentenceImport.Importer(as))
           | staticRoute("#annotate", AnnotatePage) ~> render(SentenceAnnotation(as, uid).Page())
           | sentenceList
+          | partialAnalysis
           | userListRoute
       ).notFound(redirectToPage(LandingPage)(Redirect.Replace))
     }.logToConsole

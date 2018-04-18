@@ -20,7 +20,8 @@ object Wrapper {
               <.li(ctl.link(AnnotatePage)("Annotate")),
               <.li(ctl.link(SentenceListPage("", 0))("Sentences")),
               <.li(ctl.link(Users)("Users")).when(isAdmin),
-              <.li(ctl.link(Import)("Import")).when(isAdmin)
+              <.li(ctl.link(Import)("Import")).when(isAdmin),
+              <.li(ctl.link(PartialAnalysisEditor())("AEdit"))
             ),
             <.ul(
               ^.cls := "nav-bar",

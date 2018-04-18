@@ -8,6 +8,7 @@ GET         /demo/jumanpp_lattice         controllers.Jumanpp.lattice
 GET         /demo/jumanpp_lattice2        controllers.Jumanpp.lattice
 GET         /demo/jumanpp_parse           controllers.Jumanpp.lattice_parse
 POST        /demo/jumanpp_report          controllers.Jumanpp.report
+GET         /demo/jumanpp_dump            controllers.JumanppGrpc.analyze
 
 GET         /admin/jumanpp                controllers.JumanppAdmin.stats
 GET         /admin/api/jpp/queries        controllers.JumanppAdmin.queries
@@ -21,7 +22,9 @@ GET         /atool/export                 controllers.SentenceExport.download(da
 POST        /atool/api/sentences          controllers.SentenceApiController.handler()
 POST        /atool/api/users              controllers.AnnotationUsersApiController.handler()
 GET         /atool/api/user               controllers.AnnotationUsersApiController.user()
-POST         /atool/api/user               controllers.AnnotationUsersApiController.updateUser()
+POST        /atool/api/user               controllers.AnnotationUsersApiController.updateUser()
+POST        /atool/api/pana               controllers.JumanppGrpc.partialAnalysisApi()
+
 
 GET         /atool/api/importws           controllers.SentenceImportController.importFilesystem()
 

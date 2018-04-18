@@ -134,7 +134,6 @@ case class AnnotationToolUser(
 
 class AnnotationAuth(db: AnnotationDb)(implicit ec: ExecutionContext) {
 
-
   private val coll = db.db.collection[BSONCollection]("users")
 
   def addUser(name: String): Future[Unit] = {

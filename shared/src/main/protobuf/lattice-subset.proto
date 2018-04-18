@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+option java_package = "code.transport.lattice";
+
+message NodeTag {
+    string key = 1;
+    string value = 2;
+}
+
+message CandidateNode {
+    int32 id = 1;
+
+    string surface = 2;
+    repeated NodeTag tags = 3;
+    float score = 4;
+    int32 start = 5;
+}
+
+message LatticeSubset {
+    // Top1 code.analysis result
+    repeated CandidateNode top = 1;
+    // All candidates for the focus
+    repeated CandidateNode focusNodes = 2;
+    repeated string graphemes = 3;
+}
+
+message EditableSentencePart {
+    string surface = 1;
+    bool node = 2;
+    repeated NodeTag tags = 3;
+}
+
+message EditableSentence {
+    string id = 1;
+    repeated EditableSentencePart parts = 2;
+}
+
+message CandidateFocus {
+    // both are count of UTF-16 codeunits (not unicode codepoints!) starting from 0
+    int32 start = 1;
+    int32 end = 2;
+}
+
+message PartialAnalysisQuery {
+    EditableSentence input = 1;
+    CandidateFocus focus = 2;
+}

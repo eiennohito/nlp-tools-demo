@@ -1,0 +1,30 @@
+@import ws.kotonoha.akane.analyzers.jumanpp.wire.lattice.LatticeDump
+@(doc: LatticeDump)
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Title</title>
+    </head>
+    <body>
+
+        Input: @doc.surface
+
+        Fields:
+        @for(f <- doc.fieldNames){
+            <div>@f</div>
+        }
+
+    @for(bnd <- doc.boundaries) {
+        <div>
+            Boundary
+        @for(node <- bnd.nodes) {
+            <div>
+                @node.values.head.getString: @node.beams.head.rawScores.head
+            </div>
+        }
+        </div>
+    }
+
+    </body>
+</html>

@@ -15,8 +15,8 @@ import reactivemongo.bson.{
   BSONObjectID,
   Macros
 }
-import ws.kotonoha.akane.analyzers.juman.{JumanOption, JumanPos}
-import ws.kotonoha.akane.analyzers.jumanpp.wire.{Lattice, LatticeNode}
+import ws.kotonoha.akane.analyzers.juman.{JumanFeature, JumanPos, JumanStringPos}
+import ws.kotonoha.akane.analyzers.jumanpp.wire.{Lattice, LatticeNode, ScoreDetail}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
 
@@ -81,15 +81,17 @@ object MongoObjects {
   }
 
   implicit val reportHandler = Macros.handler[AnalysisReport]
-  implicit val jumanOptHandler = Macros.handler[JumanOption]
+  implicit val jumanOptHandler = Macros.handler[JumanFeature]
   implicit val jumanPosHandler = Macros.handler[JumanPos]
+  implicit val jumanStrPosHandler = Macros.handler[JumanStringPos]
+  implicit val scoreDetailHandler = Macros.handler[ScoreDetail]
   implicit val latticeNodeHandler = Macros.handler[LatticeNode]
   implicit val latticeHandler = Macros.handler[Lattice]
   implicit val ananlysisHandler = Macros.handler[JppAnalysis]
 }
 
 class MongoWorker(db: DefaultDB)(implicit ec: ExecutionContext) {
-  private val coll = db.collection[BSONCollection]("analysis")
+  private val coll = db.collection[BSONCollection]("code.analysis")
 
   import MongoObjects._
 

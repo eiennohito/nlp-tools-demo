@@ -183,7 +183,6 @@ class AnnotationUsersApiController @Inject()(
 
 }
 
-
 object AnnotationUsers {
   def toPb(u: AnnotationToolUser): AnnotationUser = {
     AnnotationUser(

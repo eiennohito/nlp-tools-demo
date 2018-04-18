@@ -11,6 +11,7 @@ lazy val playserver = (project in file("play")).settings(
     "org.webjars" % "bootstrap" % "3.1.1-2",
     "org.reactivemongo" %% "reactivemongo" % "0.13.0",
     "net.codingwell" %% "scala-guice" % "4.1.1",
+    "com.ibm.icu" % "icu4j" % "61.1",
     guice
   ),
   pipelineStages in Assets := Seq(scalaJSPipeline),
@@ -22,7 +23,7 @@ lazy val playserver = (project in file("play")).settings(
   serverLoading in Debian := Some(ServerLoader.Systemd)
 ).enablePlugins(PlayScala, PlayAkkaHttp2Support, DebianPlugin).
   aggregate(clients.map(projectToRef): _*).
-  dependsOn(sharedJvm, `akane-knp-akka`, `akane-testkit` % Test)
+  dependsOn(sharedJvm, `akane-knp-akka`, `akane-jumanpp-grpc`, `grpc-streaming`, `akane-testkit` % Test)
   .settings(
     publishArtifact in (Compile, packageDoc) := false,
     publishArtifact in packageDoc := false,
@@ -37,7 +38,7 @@ lazy val scalajsclient = (project in file("scalajs")).settings(
     "com.lihaoyi" %%% "scalatags" % "0.6.7",
     "com.github.japgolly.scalajs-react" %%% "core" % "1.1.1",
     "com.github.japgolly.scalajs-react" %%% "extra" % "1.1.1",
-    "com.github.japgolly.scalajs-react" %%% "ext-monocle" % "1.1.1"
+    "com.github.japgolly.scalajs-react" %%% "ext-monocle" % "1.1.1",
   ),
   jsDependencies ++= Seq(
     "org.webjars.npm" % "dagre-d3" % "0.4.17" / "dist/dagre-d3.js" minified "dist/dagre-d3.min.js",
@@ -76,6 +77,7 @@ lazy val shared = crossProject(JSPlatform, JVMPlatform)
       "com.thesamet.scalapb" %%% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion,
       "com.thesamet.scalapb" %%% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
       "org.reactivemongo" %% "reactivemongo-bson-macros" % "0.13.0" % Provided intransitive(),
+      "io.grpc" % "grpc-netty" % "1.10.0",
     ),
     PB.targets in Compile := Seq(
       scalapb.gen(grpc=true, flatPackage=true) -> (sourceManaged in Compile).value
@@ -97,6 +99,10 @@ lazy val akane = project in file("akane")
 lazy val `akane-knp-akka` = project in file("akane/knp-akka")
 
 lazy val `akane-testkit` = project in file("akane/testkit")
+
+lazy val `akane-jumanpp-grpc` = project in file("akane/jumanpp-grpc")
+
+lazy val `grpc-streaming` = project in file("grpc-akka-stream")
 
 fork in run := true
 

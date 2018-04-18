@@ -2,6 +2,7 @@ package code.annotation
 
 import java.io.InputStream
 
+import code.transport.lattice.{LatticeSubset, PartialAnalysisQuery}
 import org.scalajs.dom.crypto.BufferSource
 import org.scalajs.dom.experimental._
 import org.scalajs.dom.WebSocket
@@ -153,21 +154,51 @@ class ApiService(apiUrl: String, csrfToken: String)(implicit ec: ExecutionContex
     val u8arr = obj.toTypedArray
     val src: BufferSource = u8arr
     Fetch
-      .fetch(requestPath,
+      .fetch(
+        requestPath,
         RequestInit(
-        credentials = RequestCredentials.include,
-        method = HttpMethod.POST,
-        headers = Dictionary.apply(
-          "Content-Type" -> "application/x-protobuf",
-          "Csrf-Token" -> csrfToken
-        ),
-        body = src
-      ))
+          credentials = RequestCredentials.include,
+          method = HttpMethod.POST,
+          headers = Dictionary.apply(
+            "Content-Type" -> "application/x-protobuf",
+            "Csrf-Token" -> csrfToken
+          ),
+          body = src
+        )
+      )
       .toFuture
       .flatMap { resp =>
         resp.arrayBuffer().toFuture.map { ab =>
           val buf = new Int8Array(ab)
           AnnotationUser.parseFrom(new JsTypedArrayInputStream(buf))
+        }
+      }
+  }
+
+  def partialQuery(q: PartialAnalysisQuery): Future[LatticeSubset] = {
+    import scala.scalajs.js.typedarray._
+    val requestPath = s"$apiUrl/pana"
+    val obj = q.toByteArray
+    val u8arr = obj.toTypedArray
+    val src: BufferSource = u8arr
+    Fetch
+      .fetch(
+        requestPath,
+        RequestInit(
+          credentials = RequestCredentials.include,
+          method = HttpMethod.POST,
+          headers = Dictionary.apply(
+            "Content-Type" -> "application/x-protobuf",
+            "Csrf-Token" -> csrfToken
+          ),
+          body = src
+        )
+      )
+      .toFuture
+      .flatMap { resp =>
+        resp.arrayBuffer().toFuture.map { ab =>
+          val buf = new Int8Array(ab)
+          LatticeSubset.parseFrom(new JsTypedArrayInputStream(buf))
         }
       }
   }
