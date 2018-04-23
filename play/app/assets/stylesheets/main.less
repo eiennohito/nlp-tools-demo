@@ -372,3 +372,75 @@ ul.nav-bar {
 .top1 .fixed {
   background: #c3e0ff;
 }
+
+.analysis-node {
+  display: flex;
+  flex-direction: row;
+
+  .node-surface {
+    min-width: 2cm;
+    display: flex;
+    align-self: center;
+  }
+}
+
+.node-tag {
+  display: flex;
+  flex-direction: column;
+  margin-left: 1mm;
+
+  .tag-key {
+    font-size: smaller;
+    color: rgba(87,87,87,0.6)
+  }
+
+  .tag-value {
+
+  }
+}
+
+.focus-block {
+  border-top: saddlebrown 1px solid;
+}
+
+.focus-pane {
+  display: flex;
+  flex-direction: row;
+
+  .pane-controls {
+    width: 0.8cm;
+    display: flex;
+    flex-direction: column;
+    background: lightgray;
+
+    .close-pane-btn {
+      height: 0.8cm;
+
+      &::after {
+        font-size: 0.5cm;
+        line-height: 0.8cm;
+        position: relative;
+        left: 0.2cm;
+        content: "\d7";
+      }
+    }
+
+    .remove-entry {
+
+      &::before {
+        padding-top: 2mm;
+        content: "🆑";
+        padding-bottom: 1mm;
+      }
+
+      writing-mode: tb;
+      background: pink;
+      padding-bottom: 2mm;
+      font-size: 120%;
+    }
+  }
+
+  .focus-items {
+    margin-left: 2mm;
+  }
+}

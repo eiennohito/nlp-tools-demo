@@ -154,32 +154,128 @@ case class PartialAnalysis(api: ApiService) {
       )
     }
 
-    private def renderTop1(result: Option[LatticeSubset], offsets: Set[Int]) = {
+    private def clearFocus(): Callback = {
+      scope.modState { s =>
+        s.copy(focus = None, result = s.result.map(_.clearFocusNodes))
+      }
+    }
+
+    private def removeTagOn(start: Int, end: Int): Callback = scope.props.flatMap { s =>
+      val sent = s.value
+
+      val sb = new SequenceBuilder
+
+      var offset = 0
+
+      for (p <- sent.parts) {
+        val partStart = offset
+        offset += p.surface.length
+
+        if (partStart >= start && offset <= end) {
+          sb.addNormal(p.surface)
+        } else {
+          sb.addPart(p)
+        }
+      }
+
+      s.setState(sent.copy(parts = sb.result()))
+    }
+
+    private def renderFocus2(nodes: Seq[CandidateNode], removal: Seq[NodeRemoval]) = {
+      <.div(
+        ^.cls := "focus-pane",
+        <.div(
+          ^.cls := "pane-controls",
+          <.div(
+            ^.cls := "close-pane-btn",
+            ^.onClick --> clearFocus()
+          ),
+          removal.map { r =>
+            <.div(
+              ^.cls := "remove-entry",
+              ^.onClick --> removeTagOn(r.start, r.end),
+              r.surface
+            ).when(r.tagged)
+          }.toTagMod,
+          <.div(
+            ^.cls := "remove-entry",
+            "All"
+          ).when(removal.count(_.tagged) > 1)
+        ),
+        <.div(
+          ^.cls := "focus-items",
+          nodes.map { n =>
+            renderNode(n).apply(
+              ^.onClick --> insertReqiredNode2(n, n.start)
+            )
+          }.toVdomArray
+        )
+      )
+    }
+
+    case class NodeRemoval(start: Int, end: Int, surface: String, tagged: Boolean)
+
+    private def renderTop1(result: Option[LatticeSubset], offsets: Set[Int], focus: CandidateFocus) = {
       result match {
         case None => <.span("No analysis yet! Please wait...")
         case Some(s) =>
           var offset = 0
+          var renderedFocus = false
+          val focuedNodes = new ArrayBuffer[NodeRemoval]()
           <.div(
             ^.cls := "top1",
             s.top.map { n =>
               val off = offset
               offset += n.surface.length
-              renderNode(n).apply(
+
+              if (off >= focus.start && off < focus.end) {
+                focuedNodes += NodeRemoval(off, offset, n.surface, offsets.contains(off))
+              }
+
+              val selfNode = renderNode(n).apply(
                 ^.onClick --> updateForFocus(CandidateFocus(off)),
                 ^.classSet("fixed" -> offsets.contains(off))
               )
+              if (offset >= focus.end && !renderedFocus) {
+                renderedFocus = true
+                <.div(
+                  ^.key := n.id,
+                  ^.cls := "compound-node",
+                  selfNode,
+                  renderFocus2(s.focusNodes, focuedNodes)
+                )
+              } else {
+                selfNode
+              }
+
             }.toVdomArray
           )
       }
     }
 
+    private def renderTag(tag: NodeTag) = {
+      <.div(
+        ^.cls := "node-tag",
+        <.div(
+          ^.cls := "tag-key",
+          tag.key
+        ),
+        <.div(
+          ^.cls := "tag-value",
+          tag.value
+        )
+      )
+    }
+
     private def renderNode(n: CandidateNode) = {
       <.div(
         ^.key := n.id,
-        <.span(n.surface),
-        n.tags.map(t => <.span(s"${t.key}:${t.value}")).toTagMod,
-        "S:",
-        n.score
+        ^.cls := "analysis-node",
+        <.span(
+          ^.cls := "node-surface",
+          n.surface
+        ),
+        n.tags.filterNot(_.value == n.surface).map(t => renderTag(t)).toTagMod
       )
     }
 
@@ -262,21 +358,6 @@ case class PartialAnalysis(api: ApiService) {
       ))
     }
 
-    private def renderFocus(subset: Option[LatticeSubset]) = {
-      subset match {
-        case None => <.span("Please select something...")
-        case Some(f) if f.focusNodes.isEmpty => <.span("No analysis candidates for the selection")
-        case Some(f) =>
-          <.div(
-            f.focusNodes.map { n =>
-              renderNode(n).apply(
-                ^.onClick --> insertReqiredNode2(n, n.start)
-              )
-            }.toVdomArray
-          )
-      }
-    }
-
     private def calcInputOffsets(sentence: EditableSentence) = {
       var idx = 0
       val result = Set.newBuilder[Int]
@@ -292,11 +373,15 @@ case class PartialAnalysis(api: ApiService) {
     def render(scope: StateSnapshot[EditableSentence], state: EditorState) = {
       val input = scope.value
       val offsets = calcInputOffsets(input)
+      val resolvedFocus = state.focus match {
+        case None => CandidateFocus(Int.MaxValue, Int.MaxValue)
+        case Some(f) if f.end == 0 => CandidateFocus(f.start, f.start + 1)
+        case Some(f) => f
+      }
       <.div(
         ^.cls := "analysis-editor",
         renderQuery(input, state.result.map(_.graphemes).getOrElse(Nil), state.focus),
-        renderTop1(state.result, offsets),
-        renderFocus(state.result)
+        renderTop1(state.result, offsets, resolvedFocus)
       )
     }
   }
