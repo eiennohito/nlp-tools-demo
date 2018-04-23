@@ -366,7 +366,7 @@ ul.nav-bar {
 }
 
 .grapheme&.grapheme-focused {
-  background: #1b95e0;
+  background: rgba(23, 145, 215, 0.36);
 }
 
 .top1 .fixed {
@@ -416,6 +416,10 @@ ul.nav-bar {
     .close-pane-btn {
       height: 0.8cm;
 
+      &:hover {
+        background: gray(230);
+      }
+
       &::after {
         font-size: 0.5cm;
         line-height: 0.8cm;
@@ -442,5 +446,9 @@ ul.nav-bar {
 
   .focus-items {
     margin-left: 2mm;
+
+    .analysis-node:hover {
+      background: rgba(195, 224, 255, 0.36);
+    }
   }
 }
