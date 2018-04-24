@@ -32,19 +32,20 @@ class JsTypedArrayInputStream(buf: Int8Array) extends InputStream {
       return -1
     }
 
-    var pos = position + off
+    var pos = position
     var idx = off
-    val maxRead = pos + len
-    val end = maxRead min buf.length
-    while (pos < end) {
+    val maxRead = len - off
+    val end = maxRead min (buf.length - pos)
+    var numRead = 0
+    while (numRead < end) {
       b(idx) = buf.get(pos)
       idx += 1
       pos += 1
+      numRead += 1
     }
-    val posValue = position
-    position = end
+    position = pos
 
-    end - posValue
+    numRead
   }
 
   override def available(): Int = buf.length - position
