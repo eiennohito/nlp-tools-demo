@@ -1,6 +1,9 @@
 package code.annotation
 
+import code.analysis.{PartSeqBuilder, PartialAnalysis, SentenceWithFocus}
+import code.transport.lattice.{CandidateFocus, EditableSentence, EditableSentencePart, NodeTag}
 import japgolly.scalajs.react._
+import japgolly.scalajs.react.extra.StateSnapshot
 import japgolly.scalajs.react.vdom.html_<^._
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -41,39 +44,196 @@ class SentenceApi(api: ApiService, uid: ObjId) {
 
     api.sentenceCall[Sentences](call)
   }
+
+  def editSentence(
+      sentence: Sentence,
+      edits: EditableSentence,
+      duration: Float): Future[Sentence] = {
+    val msg = MergeEdits(
+      sentenceId = sentence.id,
+      edits = Some(edits),
+      annotatorId = uid,
+      duration = duration
+    )
+
+    val call = SentenceRequest(
+      SentenceRequest.Request.Merge(msg)
+    )
+
+    api.sentenceCall[Sentence](call)
+  }
 }
 
 case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
 
   private val api = new SentenceApi(apiSvc, uid)
 
+  private val partialEditor = PartialAnalysis(apiSvc)
+
+  case class CurrentSentence(
+      data: Sentence,
+      editable: Option[EditableSentence],
+      showedTimestamp: Long
+  ) {
+    def id = data.id
+  }
+
   case class PageState(
-      stored: List[Sentence] = Nil,
-      openTimestamp: Long = System.currentTimeMillis()) {
-    def currentSentence: Option[Sentence] = stored.headOption
+      next: List[Sentence] = Nil,
+      current: Option[CurrentSentence] = None
+  ) {
+
+    private def makeEditable(sentence: Sentence) = {
+
+      val pbld = new PartSeqBuilder
+
+      for {
+        b <- sentence.blocks
+      } {
+        val ann = b.annotations
+          .find(_.annotatorId == uid)
+          .flatMap(v => YInt.unapply(v.value))
+
+        val span = ann match {
+          case Some(i) if b.spans.length > i => b.spans(i)
+          case None                          => b.spans.head
+        }
+
+        for (p <- span.tokens) {
+          if (p.unit) {
+            val part = EditableSentencePart(
+              surface = p.surface,
+              node = true,
+              tags = p.tags.map { case (k, v) => NodeTag(k, v) }.toVector
+            )
+            pbld.addPart(part)
+          } else {
+            pbld.addNormal(p.surface)
+          }
+        }
+      }
+
+      EditableSentence(
+        id = sentence.id,
+        parts = pbld.result()
+      )
+    }
+
+    private def makeCurrent(s: Sentence) = {
+      CurrentSentence(
+        s,
+        None,
+        System.currentTimeMillis()
+      )
+    }
+
+    def currentSentence: Option[CurrentSentence] = current
 
     def addSentences(sentences: Seq[Sentence]): PageState = {
       val curIds = ids.toSet
-      val nextSentences = stored ++ sentences.filterNot(s => curIds.contains(s.id))
-      PageState(nextSentences, openTimestamp)
+      val nextSentences = next ++ sentences.filterNot(s => curIds.contains(s.id))
+
+      current match {
+        case None =>
+          nextSentences match {
+            case x :: xs => PageState(xs, Some(makeCurrent(x)))
+            case _       => PageState(Nil, None)
+          }
+        case s @ Some(_) => PageState(nextSentences, s)
+      }
+    }
+
+    def withEditable(blk: SentenceBlock): PageState = {
+      val curMod = current.map(x => x.copy(editable = Some(makeEditable(x.data))))
+      copy(current = curMod)
+    }
+
+    def clearEditable(): PageState = {
+      val curMod = current.map(_.copy(editable = None))
+      copy(current = curMod)
     }
 
     def moveToNext(): PageState = {
-      val nextSentences = stored match {
-        case _ :: xs => xs
-        case _       => Nil
+      next match {
+        case x :: xs => PageState(xs, Some(makeCurrent(x)))
+        case Nil     => PageState(Nil, None)
       }
-
-      PageState(nextSentences, System.currentTimeMillis())
     }
 
-    def ids: List[String] = stored.map(_.id)
+    def applyAnnotate(cmd: Annotate): PageState = {
+      val curMod = current.map { c =>
+        val actualCmd = cmd.copy(
+          annotatorId = uid,
+          duration = (System.currentTimeMillis() - c.showedTimestamp) / 1000.0f
+        )
 
-    def shouldGetNew: Boolean = stored.lengthCompare(5) < 0
+        api.annotate(actualCmd) //ignore result
+
+        val newBlocks = c.data.blocks.map { b =>
+          if (b.offset == cmd.offset) {
+            val filtered = b.annotations.filter(_.annotatorId != uid)
+            val newAnns = if (cmd.annotation.isEmpty) {
+              filtered
+            } else {
+              filtered :+ Annotation(
+                annotatorId = actualCmd.annotatorId,
+                value = actualCmd.annotation,
+                comment = actualCmd.comment,
+                timestamp = Some(Timestamps.now),
+                duration = actualCmd.duration
+              )
+            }
+
+            b.copy(annotations = newAnns)
+          } else b
+        }
+
+        val newSent = c.data.copy(blocks = newBlocks)
+        c.copy(data = newSent)
+      }
+
+      copy(current = curMod)
+    }
+
+    def mergeEdits(sent: EditableSentence, scope: StateAccessPure[PageState]): PageState = {
+      val curMod = current.map { s =>
+        val eplaced = (System.currentTimeMillis() - s.showedTimestamp) / 1000.0f
+        val merged = MergeSentence.merge(s.data, sent, uid, eplaced)
+
+        api.editSentence(s.data, sent, eplaced).map { s2 =>
+          scope
+            .modState { p =>
+              val newCur = p.current match {
+                case Some(s3) if s3.data.id == s2.id => Some(s3.copy(data = s2))
+                case y                               => y
+              }
+              p.copy(current = newCur)
+            }
+            .runNow()
+        }
+
+        s.copy(data = merged, editable = None)
+      }
+
+      copy(current = curMod)
+    }
+
+    def ids: List[String] = next.map(_.id) ++ current.map(_.id).toSeq
+
+    def shouldGetNew: Boolean = next.lengthCompare(5) < 0
   }
 
-  case class SentenceProps(sentence: Sentence, showNext: Callback, showTime: Long)
-  case class BlockProps(block: SentenceBlock, id: String, showTime: Long)
+  case class SentenceProps(
+      sentence: Sentence,
+      showNext: Callback,
+      activateEdit: SentenceBlock => Callback,
+      annotate: Annotate => Callback)
+
+  case class BlockProps(
+      block: SentenceBlock,
+      id: String,
+      activateEdit: SentenceBlock => Callback,
+      annotate: Annotate => Callback)
 
   class PageBackend(scope: BackendScope[Unit, PageState]) {
     def init() =
@@ -92,14 +252,31 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
       }
     }
 
+    private def handleEditEvent(ev: SentenceEditEvent): Callback = {
+      ev match {
+        case AcceptEdit(s) => scope.modState(_.mergeEdits(s, scope))
+        case CancelEdit    => scope.modState(_.clearEditable())
+        case CommentEdit(cmt, ctx, span) => // scope.modState(_.markAllBad(cmt, ctx, span))
+          scope.modState(_.clearEditable())
+      }
+    }
+
     def render(state: PageState): VdomElement = {
       state.currentSentence match {
         case None => <.div("No sentences")
         case Some(s) =>
-          SentenceView(
-            SentenceProps(s,
-                          scope.modState(_.moveToNext()) >> maybeGetNewSentences(),
-                          state.openTimestamp))
+          s.editable match {
+            case None =>
+              SentenceView(
+                SentenceProps(
+                  s.data,
+                  scope.modState(_.moveToNext()) >> maybeGetNewSentences(),
+                  span => scope.modState(_.withEditable(span)),
+                  annCmd => scope.modState(_.applyAnnotate(annCmd))
+                ))
+            case Some(es) =>
+              EditorFrame(ExampleEditorProps(es, handleEditEvent))
+          }
       }
     }
   }
@@ -110,58 +287,23 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
     .backend(sc => new PageBackend(sc))
     .renderBackend
     .componentDidMount(_.backend.init())
-    .shouldComponentUpdate(x =>
-      CallbackTo {
-        (x.currentState.currentSentence, x.nextState.currentSentence) match {
-          case ((Some(s1), Some(s2))) => s1.id != s2.id
-          case _                      => true
-        }
-    })
     .build
 
-  class BlockViewBackend(scope: BackendScope[BlockProps, Annotation]) {
-
-    def annotateAs(str: String) = scope.props.flatMap { p =>
-      scope.modState { s =>
-        val annotationValue = if (s.value == str) {
-          ""
-        } else {
-          str
-        }
-
-        val secsEplaced = (System.currentTimeMillis() - p.showTime) / 1000.0f
-
-        val annreq = Annotate(
-          sentenceId = p.id,
-          offset = p.block.offset,
-          annotation = annotationValue,
-          annotatorId = uid,
-          duration = secsEplaced
-        )
-
-        api.annotate(annreq)
-
-        s.withValue(annotationValue)
-      }
-    }
-
-    def render(props: BlockProps, state: Annotation): VdomElement = {
-      val spans = props.block.spans
-
-      val content = if (spans.lengthCompare(1) == 0) {
-        <.div(
-          ^.cls := "block-normal",
-          spans.head.tokens.map(s => <.span(s.surface)).toTagMod
-        )
+  class BlockViewBackend(scope: BackendScope[BlockProps, Unit]) {
+    def annotateAs(current: Annotation, newValue: String): Callback = scope.props.flatMap { p =>
+      val annotationValue = if (current.value == newValue) {
+        ""
       } else {
-        cmpBody(spans, state, props.id.hashCode() ^ props.block.offset.hashCode())
+        newValue
       }
 
-      <.div(
-        ^.cls := "sent-block",
-        ^.key := props.block.offset,
-        content
+      val req = Annotate(
+        sentenceId = p.id,
+        offset = p.block.offset,
+        annotation = annotationValue
       )
+
+      p.annotate(req)
     }
 
     def renderSpan(s1: TokenSpan, annotation: Annotation, key: String) = {
@@ -197,13 +339,30 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
               .toTagMod
           )
         }.toTagMod,
-        ^.onClick --> annotateAs(s1.index.toString)
+        ^.onClick --> annotateAs(annotation, s1.index.toString)
       )
+    }
+
+    private def renderEditBtn(annotation: Annotation) = {
+      if (annotation.value == "両方間違い") {
+        <.div(
+          ^.cls := "opt-block opt-other other-suboption ann-selection",
+          ^.key := "opt-mis",
+          ^.onClick --> annotateAs(annotation, "両方間違い"), //will clear annotation
+          "両方間違い"
+        )
+      } else {
+        <.div(
+          ^.cls := "other-suboption other-edit",
+          ^.key := "opt-mis",
+          "詳細解析",
+          ^.onClick --> scope.props.flatMap(p => p.activateEdit(p.block))
+        )
+      }
     }
 
     def renderOther(annotation: Annotation) = {
       val otherOptions = Seq(
-        "両方間違い",
         "入力：誤字脱字",
         "入力：意味不明",
         "どうでもいい",
@@ -213,14 +372,16 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
       <.div(
         ^.cls := "opt-block opt-other",
         ^.key := "opt-other",
+        renderEditBtn(annotation),
         otherOptions.map { opt =>
           <.div(
+            ^.key := s"opt-$opt",
             ^.cls := "other-suboption ann-selection",
             ^.classSet(
               "opt-selected" -> (annotation.value == opt)
             ),
             opt,
-            ^.onClick --> annotateAs(opt)
+            ^.onClick --> annotateAs(annotation, opt)
           )
         }.toTagMod
       )
@@ -249,20 +410,38 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
           <.div(s"INVALID NUMBER OF SPANS: ${spans.length}")
       }
     }
+
+    def render(props: BlockProps): VdomElement = {
+      val block = props.block
+      val spans = block.spans
+      val state = annotationState(block)
+
+      val content = if (spans.lengthCompare(1) == 0) {
+        <.div(
+          ^.cls := "block-normal",
+          spans.head.tokens.map(s => <.span(s.surface)).toTagMod
+        )
+      } else {
+        cmpBody(spans, state, props.id.hashCode() ^ block.offset.hashCode())
+      }
+
+      <.div(
+        ^.cls := "sent-block",
+        ^.key := block.offset,
+        content
+      )
+    }
+  }
+
+  private def annotationState(block: SentenceBlock) = {
+    block.annotations.find(_.annotatorId == uid).getOrElse(Annotation())
   }
 
   val BlockView = ScalaComponent
     .builder[BlockProps]("SentenceBlock")
-    .initialStateFromProps(p => annotationState(p.block))
+    .stateless
     .backend(s => new BlockViewBackend(s))
     .renderBackend
-    .componentWillReceiveProps { ev =>
-      if (ev.nextProps.id != ev.currentProps.id) {
-        ev.setState(annotationState(ev.nextProps.block))
-      } else {
-        Callback.empty
-      }
-    }
     .build
 
   val SentenceView = ScalaComponent
@@ -280,7 +459,9 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
         ),
         <.div(
           ^.cls := "parts",
-          s.blocks.map(b => BlockView(BlockProps(b, s.id, state.showTime))).toTagMod
+          s.blocks
+            .map(b => BlockView(BlockProps(b, s.id, state.activateEdit, state.annotate)))
+            .toTagMod
         ),
         <.div(
           ^.cls := "sent-block",
@@ -294,7 +475,42 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
     }
     .build
 
-  def annotationState(block: SentenceBlock) = {
-    block.annotations.find(_.annotatorId == uid).getOrElse(Annotation())
+  sealed trait SentenceEditEvent
+  case class AcceptEdit(data: EditableSentence) extends SentenceEditEvent
+  case object CancelEdit extends SentenceEditEvent
+  case class CommentEdit(comment: String, context: String, span: Option[CandidateFocus])
+      extends SentenceEditEvent
+  case class ExampleEditorProps(sentence: EditableSentence, callback: SentenceEditEvent => Callback)
+
+  class EditorFrameBackend(scope: BackendScope[ExampleEditorProps, SentenceWithFocus]) {
+    def render(sent: SentenceWithFocus, props: ExampleEditorProps) = {
+      val snap = StateSnapshot(sent)(s => scope.setState(s))
+      val cback = props.callback
+
+      <.div(
+        ^.cls := "fullscreen-frame",
+        partialEditor.AnalysisEditor(snap)(
+          <.button(
+            "Apply",
+            ^.onClick --> cback(AcceptEdit(sent.sentence))
+          ),
+          <.button(
+            "Cancel",
+            ^.onClick --> cback(CancelEdit)
+          ),
+          <.button(
+            "Reject",
+            ^.onClick --> cback(CommentEdit("Reject", "", sent.focus))
+          )
+        )
+      )
+    }
   }
+
+  val EditorFrame = ScalaComponent
+    .builder[ExampleEditorProps]("EditorFrame")
+    .initialStateFromProps(p => SentenceWithFocus(p.sentence, None))
+    .backend(s => new EditorFrameBackend(s))
+    .renderBackend
+    .build
 }

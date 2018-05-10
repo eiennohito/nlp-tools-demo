@@ -7,11 +7,7 @@ import japgolly.scalajs.react.vdom.html_<^._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-case class SentenceList(
-    ctl: RouterCtl[AnnotationPage],
-    apiBackend: ApiService,
-    uid: ObjId,
-    admin: Boolean) {
+case class SentenceList(apiBackend: ApiService, uid: ObjId, admin: Boolean) {
 
   private val api = new SentenceApi(apiBackend, uid)
 
@@ -151,7 +147,7 @@ case class SentenceList(
         <.form(
           Edits.Field(("", StateSnapshot(query)(s => scope.modState(_.copy(search = s))))),
           <.input.submit(
-            ctl.setOnClick(SentenceListPage(query, skip)),
+            AnnotationTool.routectCtl.setOnClick(SentenceListPage(query, skip)),
             ^.value := "Search"
           ),
           ^.onSubmit --> CallbackTo(false)

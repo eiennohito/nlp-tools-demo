@@ -1,16 +1,15 @@
 package controllers
 
-import java.io.{BufferedReader, FileInputStream, InputStreamReader}
+import java.io.{BufferedReader, InputStreamReader}
 import java.nio.file.{Files, Path, Paths, StandardOpenOption}
-import javax.inject.Inject
 
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import akka.stream.Materializer
 import code.annotation._
 import com.typesafe.scalalogging.StrictLogging
+import javax.inject.Inject
 import play.api.libs.streams.ActorFlow
 import play.api.mvc.{InjectedController, WebSocket}
-import play.filters.csrf.CSRF
 import ws.kotonoha.akane.io.Charsets
 
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
@@ -40,8 +39,6 @@ class ImportSocketActor(out: ActorRef, db: SentenceDbo) extends Actor with Stric
     logger.info(str)
     out ! str
   }
-
-  import ws.kotonoha.akane.resources.FSPaths._
   private def importFrom(p: Path, tags: Seq[String]): Unit = {
     try {
       val is = Files.newInputStream(p, StandardOpenOption.READ)

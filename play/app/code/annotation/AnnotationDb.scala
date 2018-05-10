@@ -1,13 +1,14 @@
 package code.annotation
 
 import java.util.Base64
-import javax.inject.{Inject, Singleton}
 
+import javax.inject.{Inject, Singleton}
 import akka.NotUsed
 import akka.stream.scaladsl.Source
 import com.google.inject.Provides
 import com.google.protobuf.timestamp.Timestamp
 import com.typesafe.scalalogging.StrictLogging
+import controllers.AllowedFields
 import net.codingwell.scalaguice.ScalaModule
 import org.apache.commons.lang3.RandomUtils
 import play.api.Configuration
@@ -32,7 +33,6 @@ import reactivemongo.bson.{
   Macros,
   Producer
 }
-
 import ws.kotonoha.akane.utils.XInt
 
 import scala.collection.mutable
@@ -478,30 +478,15 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
           currentAnnotations.updated(idx, newAnnotation)
       }
 
-      val newAnnNumber = annIdx match {
-        case -1 => Math.max(currentAnnotations.length + 1, s.numAnnotations)
-        case _ if req.annotation == "" =>
-          val otherNumber = s.blocks
-            .filterNot(_.offset == req.offset)
-            .map(_.annotations.length)
-            .foldLeft(0)(_ max _)
-          val myNumber = newAnnotations.length
-          Math.max(otherNumber, myNumber)
-        case _ => s.numAnnotations
+      val modBlocks = s.blocks.map { b =>
+        if (b.offset == req.offset) b.copy(annotations = newAnnotations)
+        else b
       }
 
-      val newStatus = (s.status, req.annotation) match {
-        case (SentenceStatus.NotAnnotated | SentenceStatus.TotalAgreement, XInt(_)) =>
-          if (currentAnnotations
-                .filterNot(_.annotatorId == annId)
-                .forall(v => v.value == req.annotation)) {
-            SentenceStatus.TotalAgreement
-          } else {
-            SentenceStatus.PartialAgreement
-          }
-        case (SentenceStatus.PartialAgreement, XInt(_)) => SentenceStatus.PartialAgreement
-        case _                                          => SentenceStatus.WorkRequired
-      }
+      val newSent = s.copy(blocks = modBlocks)
+
+      val newAnnNumber = SentenceUtils.numAnnotations(newSent)
+      val newStatus = SentenceUtils.computeStatus(newSent)
 
       val query = BSONDocument(
         "_id" -> req.sentenceId,
@@ -519,6 +504,65 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
       )
 
       coll.update(query, update).map(_ => newAnnotation)
+    }
+  }
+
+  def mergeEdits(uid: BSONObjectID, req: MergeEdits): Future[Sentence] = {
+
+    val q = BSONDocument(
+      "_id" -> req.sentenceId
+    )
+    val saved = coll.find(q).requireOne[Sentence]
+
+    saved.flatMap { s =>
+      val merged = MergeSentence.merge(s, req.edits.get, ObjId(uid.stringify), req.duration)
+
+      val updated = merged.copy(
+        blocks = SentenceUtils.cleanTags(merged.blocks, AllowedFields.allowedFields),
+        numAnnotations = SentenceUtils.numAnnotations(s),
+        status = SentenceUtils.computeStatus(s)
+      )
+
+      coll.update(q, sentenceFormat.write(updated)).map(_ => updated)
+    }
+  }
+}
+
+object SentenceUtils {
+  def cleanTags(blocks: Seq[SentenceBlock], allowedFields: Set[String]): Seq[SentenceBlock] = {
+    blocks.map { b =>
+      b.copy(spans = b.spans.map { s =>
+        s.copy(tokens = s.tokens.map { t =>
+          val newTags = t.tags.filter { case (k, _) => allowedFields.contains(k) }
+          t.copy(tags = newTags)
+        })
+      })
+    }
+  }
+
+  def numAnnotations(s: Sentence): Int = {
+    s.blocks.flatMap(_.annotations).map(_.annotatorId).distinct.length
+  }
+
+  def computeStatus(s: Sentence): SentenceStatus = {
+    val byBlock = s.blocks.map { b =>
+      computeStatus(b.annotations)
+    }
+
+    if (byBlock.isEmpty) SentenceStatus.NotAnnotated
+    else byBlock.maxBy(_.value)
+  }
+
+  def computeStatus(anns: Seq[Annotation]): SentenceStatus = {
+    if (anns.isEmpty) {
+      SentenceStatus.NotAnnotated
+    } else {
+      val values = anns.map(_.value).distinct
+      values match {
+        case Seq(XInt(_))                                    => SentenceStatus.TotalAgreement
+        case vs if vs.forall(v => XInt.unapply(v).isDefined) => SentenceStatus.PartialAgreement
+        case _                                               => SentenceStatus.WorkRequired
+      }
     }
   }
 }

@@ -23,7 +23,7 @@ lazy val playserver = (project in file("play")).settings(
   serverLoading in Debian := Some(ServerLoader.Systemd)
 ).enablePlugins(PlayScala, PlayAkkaHttp2Support, DebianPlugin).
   aggregate(clients.map(projectToRef): _*).
-  dependsOn(sharedJvm, `akane-knp-akka`, `akane-jumanpp-grpc`, `grpc-streaming`, `akane-testkit` % Test)
+  dependsOn(shared2Jvm, `akane-knp-akka`, `akane-jumanpp-grpc`, `grpc-streaming`, `akane-testkit` % Test)
   .settings(
     publishArtifact in (Compile, packageDoc) := false,
     publishArtifact in packageDoc := false,
@@ -62,9 +62,18 @@ lazy val scalajsclient = (project in file("scalajs")).settings(
       commonJSName "ReactDOMServer"
   )
 ).enablePlugins(ScalaJSPlugin, ScalaJSWeb).
-  dependsOn(sharedJs)
+  dependsOn(shared2Js)
 
 import sbtcrossproject.{crossProject, CrossType}
+
+lazy val shared2 = crossProject(JSPlatform, JVMPlatform)
+  .withoutSuffixFor(JVMPlatform)
+  .crossType(CrossType.Pure)
+  .in(file("shared2"))
+  .dependsOn(shared)
+
+lazy val shared2Jvm = shared2.jvm
+lazy val shared2Js = shared2.js
 
 lazy val shared = crossProject(JSPlatform, JVMPlatform)
   .withoutSuffixFor(JVMPlatform)

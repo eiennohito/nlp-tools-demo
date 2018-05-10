@@ -29,7 +29,8 @@ object AllowedFields {
 class JumanppGrpc @Inject()(
     ana: Provider[LatticeDumpJppGrpcAnalyzer]
 )(implicit ec: ExecutionContext)
-    extends InjectedController with StrictLogging {
+    extends InjectedController
+    with StrictLogging {
 
   def analyze() = Action.async { req =>
     val q = req.getQueryString("s").getOrElse("")
@@ -62,11 +63,11 @@ class JumanppGrpc @Inject()(
       AnalysisRequest(
         sentence = sb.result(),
         `type` = RequestType.PartialAnnotation,
-        config = Some(JumanppConfig( // full beam analysis w/o RNN
-          globalBeamLeft = -1,
-          globalBeamCheck = -1,
-          ignoreRnn = true
-        ))
+        config = Some(
+          JumanppConfig( // full beam analysis w/o RNN
+                        globalBeamLeft = -1,
+                        globalBeamCheck = -1,
+                        ignoreRnn = true))
       )
     }
   }
@@ -126,10 +127,11 @@ class JumanppGrpc @Inject()(
   }
 
   def computeTags(node: LatticeNode, names: Seq[String]) = {
-    node.values.zip(names).flatMap { case (v, name) =>
+    node.values.zip(names).flatMap {
+      case (v, name) =>
         v.value match {
           case FieldValue.Value.String(s) if s.length > 0 => NodeTag(name, s) :: Nil
-          case _ => Nil
+          case _                                          => Nil
         }
     }
   }
@@ -193,7 +195,6 @@ class JumanppGrpc @Inject()(
       graphemes = graphems(query.input.toSeq.flatMap(_.parts.map(_.surface)).mkString)
     )
   }
-
 
   def partialAnalysisApi() = Action.async(LiftPB.protoBodyParser[PartialAnalysisQuery]) { req =>
     makeRequest(req.body) match {

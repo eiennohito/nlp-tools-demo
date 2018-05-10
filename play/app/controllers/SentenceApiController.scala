@@ -22,6 +22,15 @@ class SentenceApiController @Inject()(
           BSONObjectID.parse(obj.annotatorId.id).getOrElse(user._id)
         } else user._id
         dbo.annotate(obj, uid).map(x => Ok(LiftPB(x)))
+      case SentenceRequest.Request.Merge(req) =>
+        val uid = if (user.admin) {
+          BSONObjectID.parse(req.annotatorId.id).getOrElse(user._id)
+        } else user._id
+        if (req.edits.isEmpty) {
+          Future.successful(BadRequest("Edits are empty"))
+        } else {
+          dbo.mergeEdits(uid, req).map(x => Ok(LiftPB(x)))
+        }
       case _ => Future.successful(NotImplemented)
     }
   }

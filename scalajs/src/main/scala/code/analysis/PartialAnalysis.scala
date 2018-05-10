@@ -1,9 +1,10 @@
 package code.analysis
 
-import code.annotation.{AnnotationPage, ApiService, Edits, PartialAnalysisEditor}
+import code.annotation.{AnnotationTool, ApiService, Edits, PartialAnalysisEditor}
 import code.transport.lattice._
 import japgolly.scalajs.react._
-import japgolly.scalajs.react.extra.StateSnapshot
+import japgolly.scalajs.react.component.builder.Lifecycle
+import japgolly.scalajs.react.extra.{LogLifecycle, StateSnapshot}
 import japgolly.scalajs.react.extra.router.{RouterConfig, RouterCtl}
 import japgolly.scalajs.react.vdom.html_<^._
 import org.scalajs.dom.Event
@@ -13,10 +14,44 @@ import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
+class PartSeqBuilder {
+  private val simpleNodeData = new java.lang.StringBuilder
+  private val parts = new ArrayBuffer[EditableSentencePart]()
+
+  private def flushPart() = {
+    if (simpleNodeData.length() > 0) {
+      parts += EditableSentencePart(simpleNodeData.toString)
+      simpleNodeData.setLength(0)
+    }
+  }
+
+  def addNormal(data: String): Unit = simpleNodeData.append(data)
+  def addNormal(data: String, from: Int, to: Int): Unit = {
+    if (to - from > 0) {
+      simpleNodeData.append(data, from, to)
+    }
+  }
+
+  def addPart(part: EditableSentencePart): Unit = {
+    if (part.node) {
+      flushPart()
+      parts += part
+    } else {
+      addNormal(part.surface)
+    }
+  }
+
+  def result(): Seq[EditableSentencePart] = {
+    flushPart()
+    parts
+  }
+}
+
 case class PartialAnalysis(api: ApiService) {
   def defaultEditorState() = LatticeSubset()
 
-  val InputString = ScalaComponent.builder[StateSnapshot[String]]("InputString")
+  val InputString = ScalaComponent
+    .builder[StateSnapshot[String]]("InputString")
     .initialStateFromProps(s => s.value)
     .noBackend
     .render { s =>
@@ -28,32 +63,39 @@ case class PartialAnalysis(api: ApiService) {
           ^.value := "Start Analysis"
         )
       )
-    }.build
+    }
+    .build
 
-  case class EditorState(focus: Option[CandidateFocus] = None, result: Option[LatticeSubset] = None)
+  case class EditorState(
+      query: EditableSentence,
+      focus: Option[CandidateFocus] = None,
+      result: Option[LatticeSubset] = None)
 
-  class EditorBackend(scope: BackendScope[StateSnapshot[EditableSentence], EditorState]) {
+  class EditorBackend(scope: BackendScope[StateSnapshot[SentenceWithFocus], EditorState]) {
 
     val queryId = s"backend-query-${this.hashCode()}"
 
+    def updateForFocus(focus: CandidateFocus): Callback = scope.props.flatMap { pv =>
+      pv.modState(_.withFocus(focus))
+    }
 
-    private def updateForFocus(focus: CandidateFocus): Callback = scope.props.flatMap { sentence =>
+    def updateAnalysis(data: SentenceWithFocus): Callback = {
       val query = PartialAnalysisQuery(
-        input = Some(sentence.value),
-        focus = Some(focus)
+        input = Some(data.sentence),
+        focus = data.focus
       )
 
-      val future = api.partialQuery(query).map{ subset =>
-        scope.modState(x => x.copy(
-          focus = Some(focus),
-          result = x.result match {
-            case None => Some(subset)
-            case Some(r) => Some(r.copy(focusNodes = subset.focusNodes))
-          }
-        ))
+      val f = api.partialQuery(query).map { subset =>
+        scope.modState { s =>
+          s.copy(
+            query = data.sentence,
+            focus = data.focus,
+            result = Some(subset)
+          )
+        }
       }
 
-      Callback.future(future)
+      Callback.future(f)
     }
 
     private def updateForFocusNow(focus: CandidateFocus) = {
@@ -89,7 +131,6 @@ case class PartialAnalysis(api: ApiService) {
       }
     }
 
-
     def onStart() = Callback {
       org.scalajs.dom.document.addEventListener("selectionchange", selectionChangeListener)
       val state = scope.state.runNow()
@@ -97,7 +138,9 @@ case class PartialAnalysis(api: ApiService) {
       state.result match {
         case None =>
           val input = scope.props.runNow().value
-          api.partialQuery(PartialAnalysisQuery(Some(input))).map(l => scope.modState(_.copy(result = Some(l))).runNow())
+          api
+            .partialQuery(PartialAnalysisQuery(Some(input.sentence)))
+            .map(l => scope.modState(_.copy(result = Some(l))).runNow())
         case _ => // noop
       }
     }
@@ -106,8 +149,11 @@ case class PartialAnalysis(api: ApiService) {
       org.scalajs.dom.document.removeEventListener("selectionchange", selectionChangeListener)
     }
 
-
-    def renderQuery(sent: EditableSentence, graphemes: Seq[String], focus: Option[CandidateFocus]) = {
+    def renderQuery(
+        sent: EditableSentence,
+        graphemes: Seq[String],
+        focus: Option[CandidateFocus],
+        children: PropsChildren) = {
       var start = 0
       val myAttr = VdomAttr[Int]("data-offset")
       val withStarts = graphemes.map { s =>
@@ -118,9 +164,9 @@ case class PartialAnalysis(api: ApiService) {
 
       def isFocused(startIdx: Int) = {
         focus match {
-          case None => false
+          case None                  => false
           case Some(f) if f.end == 0 => f.start == startIdx
-          case Some(f) => startIdx >= f.start && startIdx < f.end
+          case Some(f)               => startIdx >= f.start && startIdx < f.end
         }
       }
 
@@ -134,36 +180,38 @@ case class PartialAnalysis(api: ApiService) {
           val finish = start + p.surface.length
           val localGraphemes = withStarts.filter { case (i, _) => i >= start && i < finish }
           start += p.surface.length
-          val contents = localGraphemes.map { case (idx, s) =>
-            <.span(
-              myAttr := idx,
-              ^.cls := "grapheme",
-              ^.classSet("grapheme-focused" -> isFocused(idx)),
-              ^.onClick --> updateForFocus(CandidateFocus(start = idx)),
-              s
-            )
+          val contents = localGraphemes.map {
+            case (idx, s) =>
+              <.span(
+                myAttr := idx,
+                ^.cls := "grapheme",
+                ^.classSet("grapheme-focused" -> isFocused(idx)),
+                ^.onClick --> updateForFocus(CandidateFocus(start = idx)),
+                s
+              )
           }.toTagMod
           <.span(
             myAttr := offset,
             contents
           )
         }.toTagMod,
-        <.a("Reset",
-          ^.onClick --> scope.props.flatMap(_.setState(EditableSentence.defaultInstance))
-        )
+        children
       )
     }
 
     private def clearFocus(): Callback = {
       scope.modState { s =>
         s.copy(focus = None, result = s.result.map(_.clearFocusNodes))
-      }
+      } >>
+        scope.props.flatMap { p =>
+          p.modState(_.withFocus(None))
+        }
     }
 
-    private def removeTagOn(start: Int, end: Int): Callback = scope.props.flatMap { s =>
-      val sent = s.value
+    private def removeTagOn(start: Int, end: Int): Callback = scope.props.flatMap { pv =>
+      val sent = pv.value.sentence
 
-      val sb = new SequenceBuilder
+      val sb = new PartSeqBuilder
 
       var offset = 0
 
@@ -178,10 +226,10 @@ case class PartialAnalysis(api: ApiService) {
         }
       }
 
-      s.setState(sent.copy(parts = sb.result()))
+      pv.modState(_.withParts(sb.result()).withFocus(None))
     }
 
-    private def renderFocus2(nodes: Seq[CandidateNode], removal: Seq[NodeRemoval]) = {
+    private def renderFocus(nodes: Seq[CandidateNode], removal: Seq[NodeRemoval]) = {
       <.div(
         ^.cls := "focus-pane",
         <.div(
@@ -206,7 +254,7 @@ case class PartialAnalysis(api: ApiService) {
           ^.cls := "focus-items",
           nodes.map { n =>
             renderNode(n).apply(
-              ^.onClick --> insertReqiredNode2(n, n.start)
+              ^.onClick --> insertReqiredNode(n, n.start)
             )
           }.toVdomArray
         )
@@ -215,7 +263,10 @@ case class PartialAnalysis(api: ApiService) {
 
     case class NodeRemoval(start: Int, end: Int, surface: String, tagged: Boolean)
 
-    private def renderTop1(result: Option[LatticeSubset], offsets: Set[Int], focus: CandidateFocus) = {
+    private def renderTop1(
+        result: Option[LatticeSubset],
+        offsets: Set[Int],
+        focus: CandidateFocus) = {
       result match {
         case None => <.span("No analysis yet! Please wait...")
         case Some(s) =>
@@ -242,7 +293,7 @@ case class PartialAnalysis(api: ApiService) {
                   ^.key := n.id,
                   ^.cls := "compound-node",
                   selfNode,
-                  renderFocus2(s.focusNodes, focuedNodes)
+                  renderFocus(s.focusNodes, focuedNodes)
                 )
               } else {
                 selfNode
@@ -279,84 +330,49 @@ case class PartialAnalysis(api: ApiService) {
       )
     }
 
+    private def insertReqiredNode(node: CandidateNode, offset: Int): Callback =
+      scope.props.flatMap { saved =>
+        val sent = saved.value.sentence
+        val newParts = new PartSeqBuilder()
 
-    class SequenceBuilder {
-      private val simpleNodeData = new java.lang.StringBuilder
-      private val parts = new ArrayBuffer[EditableSentencePart]()
+        val firstPos = offset
+        val lastPos = offset + node.surface.length
 
-      private def flushPart() = {
-        if (simpleNodeData.length() > 0) {
-          parts += EditableSentencePart(simpleNodeData.toString)
-          simpleNodeData.setLength(0)
+        var partOffset = 0
+        var wasNodeAdded = false
+
+        def addNode() = {
+          if (!wasNodeAdded) {
+            wasNodeAdded = true
+            newParts.addPart(
+              EditableSentencePart(
+                surface = node.surface,
+                node = true,
+                tags = node.tags
+              ))
+          }
         }
-      }
 
-      def addNormal(data: String): Unit = simpleNodeData.append(data)
-      def addNormal(data: String, from: Int, to: Int): Unit = {
-        if (to - from > 0) {
-          simpleNodeData.append(data, from, to)
+        sent.parts.foreach { p =>
+          val partStart = partOffset
+          val partEnd = partStart + p.surface.length
+          partOffset = partEnd
+
+          // org.scalajs.dom.console.warn(s"[$partStart $partEnd] {$firstPos, $lastPos}")
+
+          if (partEnd <= firstPos || partStart >= lastPos) {
+            // this case is not interesting: part is not in the modifying group
+            newParts.addPart(p)
+          } else {
+            newParts.addNormal(p.surface, 0, firstPos - partStart)
+            addNode()
+            val newStart = lastPos - partStart
+            newParts.addNormal(p.surface, newStart, p.surface.length)
+          }
         }
+
+        saved.modState(_.withParts(newParts.result()).withFocus(None))
       }
-
-      def addPart(part: EditableSentencePart): Unit = {
-        if (part.node) {
-          flushPart()
-          parts += part
-        } else {
-          addNormal(part.surface)
-        }
-      }
-
-      def result(): Seq[EditableSentencePart] = {
-        flushPart()
-        parts
-      }
-    }
-
-    private def insertReqiredNode2(node: CandidateNode, offset: Int): Callback = scope.props.flatMap { saved =>
-      val sent = saved.value
-      val newParts = new SequenceBuilder()
-
-      val firstPos = offset
-      val lastPos = offset + node.surface.length
-
-      var partOffset = 0
-      var wasNodeAdded = false
-
-      def addNode() = {
-        if (!wasNodeAdded) {
-          wasNodeAdded = true
-          newParts.addPart(EditableSentencePart(
-            surface = node.surface,
-            node = true,
-            tags = node.tags
-          ))
-        }
-      }
-
-      sent.parts.foreach { p =>
-        val partStart = partOffset
-        val partEnd = partStart + p.surface.length
-        partOffset = partEnd
-
-        // org.scalajs.dom.console.warn(s"[$partStart $partEnd] {$firstPos, $lastPos}")
-
-        if (partEnd <= firstPos || partStart >= lastPos) {
-          // this case is not interesting: part is not in the modifying group
-          newParts.addPart(p)
-        } else {
-          newParts.addNormal(p.surface, 0, firstPos - partStart)
-          addNode()
-          val newStart = lastPos - partStart
-          newParts.addNormal(p.surface, newStart, p.surface.length)
-        }
-      }
-
-      saved.setState(EditableSentence(
-        id = sent.id,
-        parts = newParts.result()
-      ))
-    }
 
     private def calcInputOffsets(sentence: EditableSentence) = {
       var idx = 0
@@ -370,55 +386,91 @@ case class PartialAnalysis(api: ApiService) {
       result.result()
     }
 
-    def render(scope: StateSnapshot[EditableSentence], state: EditorState) = {
-      val input = scope.value
+    def render(
+        scope: StateSnapshot[SentenceWithFocus],
+        state: EditorState,
+        children: PropsChildren) = {
+      val input = scope.value.sentence
       val offsets = calcInputOffsets(input)
       val resolvedFocus = state.focus match {
-        case None => CandidateFocus(Int.MaxValue, Int.MaxValue)
+        case None                  => CandidateFocus(Int.MaxValue, Int.MaxValue)
         case Some(f) if f.end == 0 => CandidateFocus(f.start, f.start + 1)
-        case Some(f) => f
+        case Some(f)               => f
       }
       <.div(
         ^.cls := "analysis-editor",
-        renderQuery(input, state.result.map(_.graphemes).getOrElse(Nil), state.focus),
+        renderQuery(input, state.result.map(_.graphemes).getOrElse(Nil), state.focus, children),
         renderTop1(state.result, offsets, resolvedFocus)
       )
     }
   }
 
-  val AnalysisEditor = ScalaComponent.builder[StateSnapshot[EditableSentence]]("AnalysisEditor")
-    .initialState(EditorState())
+  val AnalysisEditor = ScalaComponent
+    .builder[StateSnapshot[SentenceWithFocus]]("AnalysisEditor")
+    .initialStateFromProps(p => EditorState(query = p.value.sentence, focus = p.value.focus))
     .backend(s => new EditorBackend(s))
-    .renderBackend
+    .renderBackendWithChildren
     .componentDidMount(_.backend.onStart())
+    .componentWillReceiveProps { p =>
+      val nv = p.nextProps.value
+      val s = p.state
+      if (nv.sentence.equals(s.query) && nv.focus.equals(s.focus))
+        Callback.empty
+      else p.backend.updateAnalysis(nv)
+    }
     .componentWillUnmount(_.backend.onFinish())
     .build
 
-  def makeEditableSentence(str: String) = {
-    EditableSentence(
+  private def makeEditableSentence(str: String) = {
+    val es = EditableSentence(
       parts = Seq(
         EditableSentencePart(
           surface = str
         )
       )
     )
+    SentenceWithFocus(es, None)
   }
 
-  val PartialAnalyser = ScalaComponent.builder[(EditableSentence, RouterCtl[AnnotationPage])]("PartialAnalyzer")
-    .initialStateFromProps(x => x._1)
+  val PartialAnalyser = ScalaComponent
+    .builder[EditableSentence]("PartialAnalyzer")
+    .initialStateFromProps(x => SentenceWithFocus(x, None))
     .noBackend
     .render { s =>
       val state = s.state
-      val rcfg = s.props._2
+      val rcfg = AnnotationTool.routectCtl
+
+      def updateStateAndUrl(swf: SentenceWithFocus): Callback = {
+        s.setState(swf, rcfg.set(PartialAnalysisEditor(swf.sentence)))
+      }
+
       <.div(
-        if (state.parts.isEmpty) {
-          val snap = StateSnapshot("")(v => rcfg.set(PartialAnalysisEditor(makeEditableSentence(v))))
+        if (state.sentence.parts.isEmpty) {
+          val snap = StateSnapshot("")(v => updateStateAndUrl(makeEditableSentence(v)))
           InputString(snap)
         } else {
-          val snap = StateSnapshot(state)(v => rcfg.set(PartialAnalysisEditor(v)))
-          AnalysisEditor(snap)
+          val snap = StateSnapshot(state)(updateStateAndUrl)
+          AnalysisEditor(snap)(
+            <.button("Reset",
+                     ^.onClick --> updateStateAndUrl(
+                       SentenceWithFocus(EditableSentence.defaultInstance, None)))
+          )
         }
       )
-    }.componentWillReceiveProps { ev => ev.setState(ev.state) }
+    }
     .build
+}
+
+case class SentenceWithFocus(sentence: EditableSentence, focus: Option[CandidateFocus]) {
+  def withParts(parts: Seq[EditableSentencePart]): SentenceWithFocus = {
+    copy(sentence = sentence.copy(parts = parts))
+  }
+
+  def withFocus(focus: CandidateFocus): SentenceWithFocus = {
+    copy(focus = Some(focus))
+  }
+
+  def withFocus(focus: Option[CandidateFocus]): SentenceWithFocus = {
+    copy(focus = focus)
+  }
 }
