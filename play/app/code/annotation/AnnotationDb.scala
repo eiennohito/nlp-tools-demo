@@ -371,7 +371,7 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
           case Array(word) =>
             doc.merge(
               "blocks.spans.tokens.surface" -> BSONRegex(
-                s"^\\Q$word\\E",
+                s"^$word",
                 ""
               ))
           case Array(key, value) =>
