@@ -352,7 +352,7 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
       case "bad" | "ng" =>
         doc.merge(
           "status" -> BSONDocument(
-            "$ge" -> SentenceStatus.PartialAgreement.value
+            "$gte" -> SentenceStatus.PartialAgreement.value
           )
         )
       case _ =>
