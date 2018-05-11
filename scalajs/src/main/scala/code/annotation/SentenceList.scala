@@ -6,6 +6,7 @@ import japgolly.scalajs.react.extra.router.RouterCtl
 import japgolly.scalajs.react.vdom.html_<^._
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 
 case class SentenceList(apiBackend: ApiService, uid: ObjId, admin: Boolean) {
 
@@ -115,7 +116,7 @@ case class SentenceList(apiBackend: ApiService, uid: ObjId, admin: Boolean) {
         ^.key := sentence.id,
         <.td(
           ^.cls := "sentence-id",
-          sentence.id
+          AnnotationTool.routectCtl.link(ViewSentence(sentence.id))(sentence.id)
         ),
         <.td(
           ^.cls := "sentence-status",

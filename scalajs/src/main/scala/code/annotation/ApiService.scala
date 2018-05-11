@@ -9,7 +9,7 @@ import org.scalajs.dom.WebSocket
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.scalajs.js
-import scala.scalajs.js.Dictionary
+import scala.scalajs.js.{Dictionary, URIUtils}
 import scala.scalajs.js.typedarray.Int8Array
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
 
@@ -222,5 +222,20 @@ class ApiService(apiUrl: String, csrfToken: String)(implicit ec: ExecutionContex
       onMessage(ev.data.toString)
     }
     socket
+  }
+
+  def sentenceById(id: String): Future[Option[Sentence]] = {
+    val encoded = URIUtils.encodeURIComponent(id)
+    val uri = s"$apiUrl/sentence/$encoded"
+    Fetch.fetch(uri).toFuture.flatMap { resp =>
+      if (resp.status == 404) {
+        Future.successful(None)
+      } else {
+        resp.arrayBuffer().toFuture.map { ab =>
+          val buf = new Int8Array(ab)
+          Some(Sentence.parseFrom(new JsTypedArrayInputStream(buf)))
+        }
+      }
+    }
   }
 }

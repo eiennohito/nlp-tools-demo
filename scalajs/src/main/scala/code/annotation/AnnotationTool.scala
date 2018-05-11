@@ -29,6 +29,7 @@ case object AnnotatePage extends AnnotationPage
 case class PartialAnalysisEditor(state: EditableSentence = EditableSentence.defaultInstance)
     extends AnnotationPage
 case class SentenceListPage(search: String, skip: Int) extends AnnotationPage
+case class ViewSentence(id: String) extends AnnotationPage
 
 @JSExportTopLevel("AnnotationTool")
 object AnnotationTool {
@@ -101,12 +102,25 @@ object AnnotationTool {
 
         val annotationImpl = SentenceAnnotation(as, uid)
 
+        def viewSentence = {
+          dynamicRouteCT[ViewSentence](
+            ("#sentence?id=" ~ remainingPathOrBlank).xmap { str =>
+              ViewSentence(URIUtils.decodeURIComponent(str))
+            } { vs =>
+              URIUtils.encodeURIComponent(vs.id)
+            }
+          ) ~> { req =>
+            render(annotationImpl.OneSentence(req))
+          }
+        }
+
         (
           staticRoute(root, LandingPage) ~> render(Edits.Landing())
             | staticRoute("#userInfo", UserInfo) ~> render(UserPage(as).UserDisplay())
             | staticRoute("#import", Import) ~> render(SentenceImport.Importer(as))
             | staticRoute("#annotate", AnnotatePage) ~> render(annotationImpl.Page())
             | sentenceList
+            | viewSentence
             | partialAnalysis
             | userListRoute
         ).notFound(redirectToPage(LandingPage)(Redirect.Replace))

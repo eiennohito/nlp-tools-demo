@@ -3,31 +3,32 @@
 # ~~~~
 
 # Home page
-GET         /                             controllers.Application.index
-GET         /demo/jumanpp_lattice         controllers.Jumanpp.lattice
-GET         /demo/jumanpp_lattice2        controllers.Jumanpp.lattice
-GET         /demo/jumanpp_parse           controllers.Jumanpp.lattice_parse
-POST        /demo/jumanpp_report          controllers.Jumanpp.report
-GET         /demo/jumanpp_dump            controllers.JumanppGrpc.analyze
+GET         /                              controllers.Application.index
+GET         /demo/jumanpp_lattice          controllers.Jumanpp.lattice
+GET         /demo/jumanpp_lattice2         controllers.Jumanpp.lattice
+GET         /demo/jumanpp_parse            controllers.Jumanpp.lattice_parse
+POST        /demo/jumanpp_report           controllers.Jumanpp.report
+GET         /demo/jumanpp_dump             controllers.JumanppGrpc.analyze
 
-GET         /admin/jumanpp                controllers.JumanppAdmin.stats
-GET         /admin/api/jpp/queries        controllers.JumanppAdmin.queries
+GET         /admin/jumanpp                 controllers.JumanppAdmin.stats
+GET         /admin/api/jpp/queries         controllers.JumanppAdmin.queries
 
-GET         /atool                        controllers.Annotation.default()
-POST        /atool                        controllers.Annotation.handleLogin()
-GET         /atool/logout                 controllers.Annotation.logout()
-GET         /atool/api                    controllers.AnnotationApi.root()
-GET         /atool/export                 controllers.SentenceExport.download(da: controllers.DownloadArgs)
+GET         /atool                         controllers.Annotation.default()
+POST        /atool                         controllers.Annotation.handleLogin()
+GET         /atool/logout                  controllers.Annotation.logout()
+GET         /atool/api                     controllers.AnnotationApi.root()
+GET         /atool/export                  controllers.SentenceExport.download(da: controllers.DownloadArgs)
 
-POST        /atool/api/sentences          controllers.SentenceApiController.handler()
-POST        /atool/api/users              controllers.AnnotationUsersApiController.handler()
-GET         /atool/api/user               controllers.AnnotationUsersApiController.user()
-POST        /atool/api/user               controllers.AnnotationUsersApiController.updateUser()
-POST        /atool/api/pana               controllers.JumanppGrpc.partialAnalysisApi()
+POST        /atool/api/sentences           controllers.SentenceApiController.handler()
+POST        /atool/api/users               controllers.AnnotationUsersApiController.handler()
+GET         /atool/api/user                controllers.AnnotationUsersApiController.user()
+POST        /atool/api/user                controllers.AnnotationUsersApiController.updateUser()
+POST        /atool/api/pana                controllers.JumanppGrpc.partialAnalysisApi()
+GET         /atool/api/sentence/:id        controllers.SentenceApiController.sentence(id: String)
 
 
-GET         /atool/api/importws           controllers.SentenceImportController.importFilesystem()
+GET         /atool/api/importws            controllers.SentenceImportController.importFilesystem()
 
 # Map static resources from the /public folder to the /assets URL path
-GET         /assets/*file                 controllers.Assets.at(path="/public", file)
-->          /webjars/*file                webjars.Routes
+GET         /assets/*file                  controllers.Assets.at(path="/public", file)
+->          /webjars/*file                 webjars.Routes

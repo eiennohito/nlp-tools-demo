@@ -70,12 +70,50 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
 
   private val partialEditor = PartialAnalysis(apiSvc)
 
+  def annotateImpl(cmd: Annotate, sentence: Sentence, start: Long): Sentence = {
+    val actualCmd = cmd.copy(
+      annotatorId = uid,
+      duration = (System.currentTimeMillis() - start) / 1000.0f
+    )
+
+    api.annotate(actualCmd) //ignore result
+
+    val newBlocks = sentence.blocks.map { b =>
+      if (b.offset == cmd.offset) {
+        val filtered = b.annotations.filter(_.annotatorId != uid)
+        val newAnns = if (cmd.annotation.isEmpty) {
+          filtered
+        } else {
+          filtered :+ Annotation(
+            annotatorId = actualCmd.annotatorId,
+            value = actualCmd.annotation,
+            comment = actualCmd.comment,
+            timestamp = Some(Timestamps.now),
+            duration = actualCmd.duration
+          )
+        }
+
+        b.copy(annotations = newAnns)
+      } else b
+    }
+
+    sentence.copy(blocks = newBlocks)
+  }
+
   case class CurrentSentence(
       data: Sentence,
       editable: Option[EditableSentence],
       showedTimestamp: Long
   ) {
     def id = data.id
+  }
+
+  private def makeCurrent(s: Sentence) = {
+    CurrentSentence(
+      s,
+      None,
+      System.currentTimeMillis()
+    )
   }
 
   case class PageState(
@@ -119,14 +157,6 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
       )
     }
 
-    private def makeCurrent(s: Sentence) = {
-      CurrentSentence(
-        s,
-        None,
-        System.currentTimeMillis()
-      )
-    }
-
     def currentSentence: Option[CurrentSentence] = current
 
     def addSentences(sentences: Seq[Sentence]): PageState = {
@@ -162,40 +192,14 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
 
     def applyAnnotate(cmd: Annotate): PageState = {
       val curMod = current.map { c =>
-        val actualCmd = cmd.copy(
-          annotatorId = uid,
-          duration = (System.currentTimeMillis() - c.showedTimestamp) / 1000.0f
-        )
-
-        api.annotate(actualCmd) //ignore result
-
-        val newBlocks = c.data.blocks.map { b =>
-          if (b.offset == cmd.offset) {
-            val filtered = b.annotations.filter(_.annotatorId != uid)
-            val newAnns = if (cmd.annotation.isEmpty) {
-              filtered
-            } else {
-              filtered :+ Annotation(
-                annotatorId = actualCmd.annotatorId,
-                value = actualCmd.annotation,
-                comment = actualCmd.comment,
-                timestamp = Some(Timestamps.now),
-                duration = actualCmd.duration
-              )
-            }
-
-            b.copy(annotations = newAnns)
-          } else b
-        }
-
-        val newSent = c.data.copy(blocks = newBlocks)
+        val newSent = annotateImpl(cmd, c.data, c.showedTimestamp)
         c.copy(data = newSent)
       }
 
       copy(current = curMod)
     }
 
-    def mergeEdits(sent: EditableSentence, scope: StateAccessPure[PageState]): PageState = {
+    def mergeEdits(sent: EditableSentence, scope: StateSnapshot[PageState]): PageState = {
       val curMod = current.map { s =>
         val eplaced = (System.currentTimeMillis() - s.showedTimestamp) / 1000.0f
         val merged = MergeSentence.merge(s.data, sent, uid, eplaced)
@@ -235,7 +239,56 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
       activateEdit: SentenceBlock => Callback,
       annotate: Annotate => Callback)
 
+  class PageImplBackend(scope2: BackendScope[PageImplProps, Unit]) {
+
+    def modState(fn: PageState => PageState): Callback = {
+      scope2.props.flatMap(p => p.state.modState(fn))
+    }
+
+    def state = scope2.props.runNow().state
+
+    private def handleEditEvent(ev: SentenceEditEvent): Callback = {
+      ev match {
+        case AcceptEdit(s) => modState(_.mergeEdits(s, state))
+        case CancelEdit    => modState(_.clearEditable())
+        case CommentEdit(cmt, ctx, span) => // scope.modState(_.markAllBad(cmt, ctx, span))
+          modState(_.clearEditable())
+      }
+    }
+
+    def render(state: PageImplProps): VdomElement = {
+      val theState = state.state.value
+      theState.currentSentence match {
+        case None => <.div("No sentences")
+        case Some(s) =>
+          s.editable match {
+            case None =>
+              SentenceView(
+                SentenceProps(
+                  s.data,
+                  state.nextAction,
+                  span => modState(_.withEditable(span)),
+                  annCmd => modState(_.applyAnnotate(annCmd))
+                ))
+            case Some(es) =>
+              EditorFrame(ExampleEditorProps(es, handleEditEvent))
+          }
+      }
+    }
+  }
+
+  case class PageImplProps(nextAction: Callback, state: StateSnapshot[PageState])
+
+  val PageImpl = ScalaComponent
+    .builder[PageImplProps]("PageImpl")
+    .stateless
+    .renderBackend[PageImplBackend]
+    .build
+
   class PageBackend(scope: BackendScope[Unit, PageState]) {
+
+    def handler(): Callback = scope.modState(_.moveToNext()) >> maybeGetNewSentences()
+
     def init() =
       scope.state.map { s =>
         api.fetchNextSentences(s.ids).map { sents =>
@@ -252,40 +305,15 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
       }
     }
 
-    private def handleEditEvent(ev: SentenceEditEvent): Callback = {
-      ev match {
-        case AcceptEdit(s) => scope.modState(_.mergeEdits(s, scope))
-        case CancelEdit    => scope.modState(_.clearEditable())
-        case CommentEdit(cmt, ctx, span) => // scope.modState(_.markAllBad(cmt, ctx, span))
-          scope.modState(_.clearEditable())
-      }
-    }
-
-    def render(state: PageState): VdomElement = {
-      state.currentSentence match {
-        case None => <.div("No sentences")
-        case Some(s) =>
-          s.editable match {
-            case None =>
-              SentenceView(
-                SentenceProps(
-                  s.data,
-                  scope.modState(_.moveToNext()) >> maybeGetNewSentences(),
-                  span => scope.modState(_.withEditable(span)),
-                  annCmd => scope.modState(_.applyAnnotate(annCmd))
-                ))
-            case Some(es) =>
-              EditorFrame(ExampleEditorProps(es, handleEditEvent))
-          }
-      }
+    def render(st: PageState): VdomElement = {
+      PageImpl(PageImplProps(handler(), StateSnapshot(st)(y => scope.setState(y))))
     }
   }
 
   val Page = ScalaComponent
-    .builder[Unit]("AnotationPage")
+    .builder[Unit]("AnnotationPage")
     .initialState(new PageState)
-    .backend(sc => new PageBackend(sc))
-    .renderBackend
+    .renderBackend[PageBackend]
     .componentDidMount(_.backend.init())
     .build
 
@@ -452,8 +480,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
       val s = state.sentence
       <.div(
         ^.cls := "sentence",
-        <.p(
-          ^.cls := "sent-id",
+        AnnotationTool.routectCtl.link(ViewSentence(s.id))(
           "S-ID: ",
           s.id
         ),
@@ -470,7 +497,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
             "次の文へ",
             ^.onClick --> state.showNext
           )
-        )
+        ).when(state.showNext != Callback.empty)
       )
     }
     .build
@@ -512,5 +539,48 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
     .initialStateFromProps(p => SentenceWithFocus(p.sentence, None))
     .backend(s => new EditorFrameBackend(s))
     .renderBackend
+    .build
+
+  def makeSentenceDetailState(id: String): SentenceDetailState = {
+    val f = apiSvc.sentenceById(id).map { so =>
+      so.map { s =>
+        PageState(Nil, Some(makeCurrent(s)))
+      }
+    }
+    SentenceDetailState(id, f)
+  }
+
+  case class SentenceDetailState(
+      id: String,
+      data: Future[Option[PageState]]
+  )
+
+  class SentenceDetailBackend(scope: BackendScope[ViewSentence, SentenceDetailState]) {
+    def render(state: SentenceDetailState): VdomElement = {
+      state.data.value match {
+        case None => <.div("Loading...")
+        case Some(scala.util.Failure(ex)) =>
+          Callback.log(ex.getMessage)
+          <.div("Failure...")
+        case Some(scala.util.Success(None)) => <.div("No such sentence exist")
+        case Some(scala.util.Success(Some(s))) =>
+          val props = PageImplProps(
+            Callback.empty,
+            StateSnapshot(s) { s =>
+              scope.setState(
+                state.copy(data = Future.successful(Some(s)))
+              )
+            }
+          )
+          PageImpl(props)
+      }
+    }
+  }
+
+  val OneSentence = ScalaComponent
+    .builder[ViewSentence]("OneSentence")
+    .initialStateFromProps(p => makeSentenceDetailState(p.id))
+    .renderBackend[SentenceDetailBackend]
+    .componentDidMount(x => Callback.future(x.state.data.map(_ => x.forceUpdate)))
     .build
 }

@@ -41,4 +41,11 @@ class SentenceApiController @Inject()(
       case None    => Future.successful(Unauthorized("You are not allowed here"))
     }
   }
+
+  def sentence(id: String) = Action.async { implicit req =>
+    dbo.findById(id).map {
+      case None    => NotFound(s"No sentence with id: $id")
+      case Some(s) => Ok(LiftPB(s))
+    }
+  }
 }

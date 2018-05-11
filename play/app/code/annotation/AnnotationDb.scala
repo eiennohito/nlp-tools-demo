@@ -283,7 +283,6 @@ object SentenceBSON {
 }
 
 class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) extends StrictLogging {
-
   private val coll = db.db.collection[BSONCollection]("sentences")
 
   import SentenceBSON._
@@ -525,6 +524,13 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
 
       coll.update(q, sentenceFormat.write(updated)).map(_ => updated)
     }
+  }
+
+  def findById(id: String): Future[Option[Sentence]] = {
+    val q = BSONDocument(
+      "_id" -> id
+    )
+    coll.find(q).one[Sentence]
   }
 }
 
