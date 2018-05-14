@@ -20,5 +20,19 @@ class MergeSentenceSpec extends FreeSpec with Matchers {
       val sent = MergeSentence.merge(sentence, edits, ObjId(""), 0)
       sent.blocks should have length(3)
     }
+
+    "merges correctly ends in" in {
+      val sentence = decode[Sentence]("ChV3MjAxMDA3LTAwODA2MDY3MzAtMTMSHhIcEhoKGOWNiOWJjeS4reOBruaXqeOBhOaZgumWkxKbAQgIEjASLgoD552AEAEaDQoDcG9zEgblkI3oqZ4aFgoGc3VicG9zEgzmma7pgJrlkI3oqZ4SZQgBEmEKA+edgBABGhIKCGJhc2Vmb3JtEgbnnYDjgosaGAoIY29uanR5cGUSDOavjemfs+WLleipnhoNCgNwb3MSBuWLleipnhobCghjb25qZm9ybRIP5Z+65pys6YCj55So5b2iElAICRJMEkoKSOOBruS6iOWumuOBp+WHuuOBn+OBq+OCguOBi+OBi+OCj+OCieOBmuOAgeS6iOaDs+OCkui2heOBiOOCi+Wkp+a4i+a7nuOAghobc2NvcmVzOiAtMC4wMTI4MzE5IC0wLjU3Mjg5Gk3nnYAJYmFzZWZvcm06552A44KLCWNvbmp0eXBlOuavjemfs+WLleipnglwb3M65YuV6KmeCWNvbmpmb3JtOuWfuuacrOmAo+eUqOW9ohoiUy1JRDp3MjAxMDA3LTAwODA2MDY3MzAtMTMgQ09VTlQ6MTIEdGVzdDoKCLyZ+dQFELD7JQ==")
+      val edits = decode[EditableSentence]("ChV3MjAxMDA3LTAwODA2MDY3MzAtMTMSGgoY5Y2I5YmN5Lit44Gu5pep44GE5pmC6ZaTEi4KA+edgBABGg0KA3BvcxIG5ZCN6KmeGhYKBnN1YnBvcxIM5pmu6YCa5ZCN6KmeEl8KA+OBrhABGg4KB3N1cmZhY2USA+OBrhoNCgNwb3MSBuWKqeipnhoWCgZzdWJwb3MSDOaOpee2muWKqeipnhoPCghiYXNlZm9ybRID44GuGg4KB3JlYWRpbmcSA+OBrhJHCkXkuojlrprjgaflh7rjgZ/jgavjgoLjgYvjgYvjgo/jgonjgZrjgIHkuojmg7PjgpLotoXjgYjjgovlpKfmuIvmu57jgII=")
+
+      val result = MergeSentence.merge(sentence, edits, ObjId(""), 0)
+      result.blocks should have length(3)
+      val middle = result.blocks(1)
+      middle.spans should have length(2)
+      val left = middle.spans(0)
+      left.tokens should have length (2)
+      val right = middle.spans(1)
+      right.tokens should have length(2)
+    }
   }
 }

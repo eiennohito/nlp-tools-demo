@@ -162,9 +162,9 @@ object MergeSentence {
       for (b <- blocks) {
         if (b.start < mergeFrom || b.end > mergeTo) {
           assert(b.noTags)
-          handleBlock(b.subBlockNoTags(mergeFrom, mergeTo))
+          handleBlock(b.subBlockNoTags(mergeFrom, mergeTo), false)
         } else {
-          handleBlock(b.block)
+          handleBlock(b.block, true)
         }
       }
 
@@ -228,7 +228,7 @@ object MergeSentence {
       )
     }
 
-    def handleBlock(block: SentenceBlock): Unit = {
+    def handleBlock(block: SentenceBlock, normal: Boolean): Unit = {
       // step1: prepare and explode prefixes
       if (spans.isEmpty) {
         spans = new ArrayBuffer(block.spans.size)
@@ -238,7 +238,7 @@ object MergeSentence {
       }
 
       //step2: make number of spans equal
-      if (spans.length != block.spans.length) {
+      if (spans.length < block.spans.length) {
         var curLen = spans.length
         val targetLen = block.spans.length
 
@@ -249,12 +249,20 @@ object MergeSentence {
       }
 
       //step3: merge each span
-      val it1 = spans.iterator
-      val it2 = block.spans.iterator
-      while (it1.hasNext && it2.hasNext) {
-        val bldr = it1.next()
-        val span = it2.next()
-        bldr.appendSpan(span)
+      if (normal) {
+        val it1 = spans.iterator
+        val it2 = block.spans.iterator
+        while (it1.hasNext && it2.hasNext) {
+          val bldr = it1.next()
+          val span = it2.next()
+          bldr.appendSpan(span)
+        }
+      } else {
+        assert(block.spans.size == 1)
+        val it1 = spans.iterator
+        while (it1.hasNext) {
+          it1.next().appendSpan(block.spans.head)
+        }
       }
 
       //step3.5: make sure that there are at least 2 options

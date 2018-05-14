@@ -264,8 +264,9 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
           scope
             .modState { p =>
               val newCur = p.current match {
-                case Some(s3) if s3.data.id == s2.id => Some(s3.copy(data = s2, editable = None, curBlock = None))
-                case y                               => y
+                case Some(s3) if s3.data.id == s2.id =>
+                  Some(s3.copy(data = s2, editable = None, curBlock = None))
+                case y => y
               }
               p.copy(current = newCur)
             }
