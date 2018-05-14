@@ -400,7 +400,8 @@ case class PartialAnalysis(api: ApiService) {
       <.div(
         ^.cls := "analysis-editor",
         renderQuery(input, state.result.map(_.graphemes).getOrElse(Nil), state.focus, children),
-        renderTop1(state.result, offsets, resolvedFocus)
+        renderTop1(state.result, offsets, resolvedFocus),
+        <.div(^.cls := "dummy")
       )
     }
   }
