@@ -10,14 +10,14 @@ object Wrapper {
     ScalaComponent
       .builder[Unit]("PageWrap")
       .stateless
-      .render_C { (children) =>
+      .render_C { children =>
         <.div(
           ^.cls := "container",
           <.div(
             ^.cls := "header",
             <.ul(
               ^.cls := "nav-bar",
-              <.li(ctl.link(AnnotatePage)("Annotate")),
+              <.li(ctl.link(AnnotatePage(ReviewPageProps.default))("Annotate")),
               <.li(ctl.link(SentenceListPage("", 0))("Sentences")),
               <.li(ctl.link(Users)("Users")).when(isAdmin),
               <.li(ctl.link(Import)("Import")).when(isAdmin),

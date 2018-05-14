@@ -153,7 +153,10 @@ case class SentenceList(apiBackend: ApiService, uid: ObjId, admin: Boolean) {
           ),
           ^.onSubmit --> CallbackTo(false)
         ),
-        Export(this).when(admin)
+        AnnotationTool.routectCtl.link(AnnotatePage(ReviewPageProps(false,
+          GetSentences(query = query, reviewedBefore = Some(Timestamps.now)))))(
+          "Review"
+        )
       )
     }
 
@@ -171,24 +174,6 @@ case class SentenceList(apiBackend: ApiService, uid: ObjId, admin: Boolean) {
       )
     }
   }
-
-  val Export = ScalaComponent
-    .builder[ListBackend]("Export")
-    .initialState("")
-    .noBackend
-    .render { ctx =>
-      <.form(
-        Edits.Field(("", StateSnapshot(ctx.state)(x => ctx.setState(x)))),
-        <.input.submit(
-          ^.onClick --> ctx.props.doExportTo(ctx.state),
-          ^.value := "Export"
-        ),
-        ^.onSubmit ==> { e =>
-          e.preventDefault(); CallbackTo(false)
-        }
-      )
-    }
-    .build
 
   val Page = ScalaComponent
     .builder[SentenceListPage]("SentenceList")

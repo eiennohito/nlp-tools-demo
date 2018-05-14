@@ -31,6 +31,11 @@ class SentenceApiController @Inject()(
         } else {
           dbo.mergeEdits(uid, req).map(x => Ok(LiftPB(x)))
         }
+      case SentenceRequest.Request.Review(req) =>
+        val uid = if (user.admin) {
+          BSONObjectID.parse(req.annotatorId.id).getOrElse(user._id)
+        } else user._id
+        dbo.publishReview(uid, req.sentenceId).map(r => Ok(LiftPB(r)))
       case _ => Future.successful(NotImplemented)
     }
   }

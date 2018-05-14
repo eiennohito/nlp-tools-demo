@@ -1,45 +1,26 @@
 package code.annotation
 
-import java.util.Base64
-
-import javax.inject.{Inject, Singleton}
 import akka.NotUsed
 import akka.stream.scaladsl.Source
 import com.google.inject.Provides
 import com.google.protobuf.timestamp.Timestamp
 import com.typesafe.scalalogging.StrictLogging
 import controllers.AllowedFields
+import javax.inject.{Inject, Singleton}
 import net.codingwell.scalaguice.ScalaModule
 import org.apache.commons.lang3.RandomUtils
 import play.api.Configuration
-import play.api.mvc.Result
 import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.api.commands.UpdateWriteResult
 import reactivemongo.api.{Cursor, DefaultDB, MongoConnection}
-import reactivemongo.bson.{
-  BSONArray,
-  BSONDateTime,
-  BSONDocument,
-  BSONDocumentHandler,
-  BSONDouble,
-  BSONElement,
-  BSONHandler,
-  BSONInteger,
-  BSONNumberLike,
-  BSONObjectID,
-  BSONRegex,
-  BSONValue,
-  BSONWriter,
-  Macros,
-  Producer
-}
+import reactivemongo.bson.Macros.Annotations.Key
+import reactivemongo.bson.{BSON, BSONArray, BSONDateTime, BSONDocument, BSONDocumentHandler, BSONDouble, BSONElement, BSONHandler, BSONInteger, BSONObjectID, BSONRegex, BSONValue, Macros}
+import scalapb.{GeneratedEnum, GeneratedEnumCompanion}
 import ws.kotonoha.akane.utils.XInt
 
 import scala.collection.mutable
 import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.util.matching.Regex
-import scala.util.{Success, Try}
-import scalapb.{GeneratedEnum, GeneratedEnumCompanion}
+import scala.util.Try
 
 case class AnnotationDb(db: DefaultDB)
 
@@ -279,7 +260,11 @@ object SentenceBSON {
   implicit val tokenSpanFormat: BSONDocumentHandler[TokenSpan] = Macros.handler[TokenSpan]
   implicit val blockFormat: BSONDocumentHandler[SentenceBlock] = Macros.handler[SentenceBlock]
   implicit val statusFormat: BSONHandler[BSONInteger, SentenceStatus] = enumFormat[SentenceStatus]
+  implicit val reviewFormat: BSONDocumentHandler[Review] = Macros.handler[Review]
   implicit val sentenceFormat: BSONDocumentHandler[Sentence] = Macros.handler[Sentence]
+
+  case class SentenceIdReviews(@Key("_id")id: String, reviews: Seq[Review])
+  implicit val sirFormat: BSONDocumentHandler[SentenceIdReviews] = Macros.handler[SentenceIdReviews]
 }
 
 class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) extends StrictLogging {
@@ -427,6 +412,37 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
       )
     }
 
+    if (req.reviewedBefore.isDefined) {
+      val beforeDate = BSONDateTime(req.reviewedBefore.get.seconds * 1000)
+      val annId = user._id
+
+      val subQ = BSONDocument(
+        "$or" -> BSONArray(
+          BSONDocument(
+            "reviews" -> BSONDocument(
+              "$elemMatch" -> BSONDocument(
+                "annotatorId" -> annId,
+                "reviewedOn" -> BSONDocument(
+                  "$lte" -> beforeDate
+                )
+              )
+            )
+          ),
+          BSONDocument(
+            "reviews" -> BSONDocument(
+              "$not" -> BSONDocument(
+                "$elemMatch" -> BSONDocument(
+                  "annotatorId" -> annId
+                )
+              )
+            )
+          )
+        )
+      )
+
+      q = q.merge(subQ)
+    }
+
     q = q.merge(parseQuery(req.query, user))
 
     val max = if (req.limit == 0) 15 else req.limit
@@ -446,6 +462,36 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
       cnt <- itemCount
       data <- items
     } yield Sentences(data, cnt)
+  }
+
+  def publishReview(uid: BSONObjectID, sid: String): Future[Review] = {
+    val q = BSONDocument(
+      "_id" -> sid
+    )
+
+    val proj = BSONDocument(
+      "reviews" -> 1
+    )
+
+    val search = coll.find(q, proj).requireOne[SentenceIdReviews]
+
+    val now = BSONDateTime(System.currentTimeMillis())
+
+    val review = Review(
+      annotatorId = ObjId(uid.stringify),
+      reviewedOn = Some(Timestamps.fromMillis(now.value))
+    )
+
+    search.flatMap { sir =>
+      val filtered = sir.reviews.filter(_.annotatorId.id != uid.stringify)
+      val reviews = filtered :+ review
+      val upd = BSONDocument(
+        "$set" -> BSONDocument(
+          "reviews" -> BSON.write(reviews)
+        )
+      )
+      coll.update(q, upd).map(_ => review)
+    }
   }
 
   def annotate(req: Annotate, uid: BSONObjectID): Future[Annotation] = {
@@ -502,7 +548,9 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
         )
       )
 
-      coll.update(query, update).map(_ => newAnnotation)
+      coll.update(query, update)
+        .flatMap(_ => publishReview(uid, req.sentenceId))
+        .map(_ => newAnnotation)
     }
   }
 
@@ -522,7 +570,9 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
         status = SentenceUtils.computeStatus(s)
       )
 
-      coll.update(q, sentenceFormat.write(updated)).map(_ => updated)
+      coll.update(q, sentenceFormat.write(updated))
+        .flatMap(_ => publishReview(uid, req.sentenceId))
+        .map(_ => updated)
     }
   }
 

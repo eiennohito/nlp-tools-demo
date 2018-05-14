@@ -10,11 +10,10 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
 class SentenceApi(api: ApiService, uid: ObjId) {
-  def fetchNextSentences(ignore: Seq[String], limit: Int = 15): Future[Seq[Sentence]] = {
-    val msg = GetSentences(
+  def fetchNextSentences(baseQuery: GetSentences, ignore: Seq[String], limit: Int = 15): Future[Seq[Sentence]] = {
+    val msg = baseQuery.copy(
       exceptIds = ignore.distinct,
-      limit = limit,
-      newForUser = true
+      limit = limit
     )
 
     val wrapper = SentenceRequest(
@@ -62,9 +61,22 @@ class SentenceApi(api: ApiService, uid: ObjId) {
 
     api.sentenceCall[Sentence](call)
   }
+
+  def publishReview(sid: String, uid: ObjId): Future[Review] = {
+    val msg = ReviewSentence(
+      sentenceId = sid,
+      annotatorId = uid
+    )
+
+    val call = SentenceRequest(
+      SentenceRequest.Request.Review(msg)
+    )
+
+    api.sentenceCall[Review](call)
+  }
 }
 
-case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
+case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) {
 
   private val api = new SentenceApi(apiSvc, uid)
 
@@ -185,7 +197,9 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
 
     def moveToNext(): PageState = {
       next match {
-        case x :: xs => PageState(xs, Some(makeCurrent(x)))
+        case x :: xs =>
+          api.publishReview(x.id, uid)
+          PageState(xs, Some(makeCurrent(x)))
         case Nil     => PageState(Nil, None)
       }
     }
@@ -231,13 +245,17 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
       sentence: Sentence,
       showNext: Callback,
       activateEdit: SentenceBlock => Callback,
-      annotate: Annotate => Callback)
+      annotate: Annotate => Callback,
+    showCounts: Boolean
+    )
 
   case class BlockProps(
       block: SentenceBlock,
       id: String,
       activateEdit: SentenceBlock => Callback,
-      annotate: Annotate => Callback)
+      annotate: Annotate => Callback,
+    showCounts: Boolean
+  )
 
   class PageImplBackend(scope2: BackendScope[PageImplProps, Unit]) {
 
@@ -268,7 +286,8 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
                   s.data,
                   state.nextAction,
                   span => modState(_.withEditable(span)),
-                  annCmd => modState(_.applyAnnotate(annCmd))
+                  annCmd => modState(_.applyAnnotate(annCmd)),
+                  state.showCounts
                 ))
             case Some(es) =>
               EditorFrame(ExampleEditorProps(es, handleEditEvent))
@@ -277,7 +296,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
     }
   }
 
-  case class PageImplProps(nextAction: Callback, state: StateSnapshot[PageState])
+  case class PageImplProps(nextAction: Callback, state: StateSnapshot[PageState], showCounts: Boolean)
 
   val PageImpl = ScalaComponent
     .builder[PageImplProps]("PageImpl")
@@ -285,33 +304,39 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
     .renderBackend[PageImplBackend]
     .build
 
-  class PageBackend(scope: BackendScope[Unit, PageState]) {
+  class PageBackend(scope: BackendScope[ReviewPageProps, PageState]) {
 
     def handler(): Callback = scope.modState(_.moveToNext()) >> maybeGetNewSentences()
 
     def init() =
       scope.state.map { s =>
-        api.fetchNextSentences(s.ids).map { sents =>
+        val props = scope.props.runNow()
+        api.fetchNextSentences(props.search, s.ids).map { sents =>
           scope.modState(_.addSentences(sents)).runNow()
         }
       }.void
 
     def maybeGetNewSentences() = scope.state.flatMap { s =>
       if (s.shouldGetNew) {
+        val props = scope.props.runNow()
         Callback.future(
-          api.fetchNextSentences(s.ids).map(sents => scope.modState(_.addSentences(sents))))
+          api.fetchNextSentences(props.search, s.ids).map(sents => scope.modState(_.addSentences(sents))))
       } else {
         Callback.empty
       }
     }
 
-    def render(st: PageState): VdomElement = {
-      PageImpl(PageImplProps(handler(), StateSnapshot(st)(y => scope.setState(y))))
+    def render(rpp: ReviewPageProps, st: PageState): VdomElement = {
+      PageImpl(PageImplProps(
+        handler(),
+        StateSnapshot(st)(y => scope.setState(y)),
+        rpp.showCounts && isAdmin
+      ))
     }
   }
 
   val Page = ScalaComponent
-    .builder[Unit]("AnnotationPage")
+    .builder[ReviewPageProps]("AnnotationPage")
     .initialState(new PageState)
     .renderBackend[PageBackend]
     .componentDidMount(_.backend.init())
@@ -335,18 +360,25 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
     }
 
     def renderSpan(s1: TokenSpan, annotation: Annotation, key: String) = {
+      val showCounts = scope.props.runNow().showCounts
+      val annValue = s1.index.toString
+      val count = scope.props.runNow().block.annotations.count(_.value == annValue)
       <.div(
         ^.cls := s"opt-block opt-span block-$key ann-selection",
         ^.key := key,
         ^.classSet(
-          "opt-selected" -> (s1.index.toString == annotation.value)
+          "opt-selected" -> (annValue == annotation.value)
         ),
         s1.tokens.map { t =>
           <.div(
             ^.cls := "token",
             <.span(
               ^.cls := "token-data surface",
-              t.surface
+              t.surface,
+              <.span(
+                ^.cls := "token-ann-cnt",
+                count
+              ).when(showCounts && count != 0)
             ),
             t.tags.toSeq
               .sortBy(_._1)
@@ -367,7 +399,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
               .toTagMod
           )
         }.toTagMod,
-        ^.onClick --> annotateAs(annotation, s1.index.toString)
+        ^.onClick --> annotateAs(annotation, annValue)
       )
     }
 
@@ -390,6 +422,8 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
     }
 
     def renderOther(annotation: Annotation) = {
+      val showCounts = scope.props.runNow().showCounts
+
       val otherOptions = Seq(
         "入力：誤字脱字",
         "入力：意味不明",
@@ -402,6 +436,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
         ^.key := "opt-other",
         renderEditBtn(annotation),
         otherOptions.map { opt =>
+          val count = scope.props.runNow().block.annotations.count(_.value == opt)
           <.div(
             ^.key := s"opt-$opt",
             ^.cls := "other-suboption ann-selection",
@@ -409,6 +444,10 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
               "opt-selected" -> (annotation.value == opt)
             ),
             opt,
+            <.span(
+              ^.cls := "token-ann-cnt",
+              count
+            ).when(showCounts && count != 0),
             ^.onClick --> annotateAs(annotation, opt)
           )
         }.toTagMod
@@ -487,7 +526,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
         <.div(
           ^.cls := "parts",
           s.blocks
-            .map(b => BlockView(BlockProps(b, s.id, state.activateEdit, state.annotate)))
+            .map(b => BlockView(BlockProps(b, s.id, state.activateEdit, state.annotate, state.showCounts)))
             .toTagMod
         ),
         <.div(
@@ -544,6 +583,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
   def makeSentenceDetailState(id: String): SentenceDetailState = {
     val f = apiSvc.sentenceById(id).map { so =>
       so.map { s =>
+        api.publishReview(s.id, uid)
         PageState(Nil, Some(makeCurrent(s)))
       }
     }
@@ -570,7 +610,8 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId) {
               scope.setState(
                 state.copy(data = Future.successful(Some(s)))
               )
-            }
+            },
+            isAdmin
           )
           PageImpl(props)
       }

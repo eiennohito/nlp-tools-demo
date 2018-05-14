@@ -25,7 +25,7 @@ case object LandingPage extends AnnotationPage
 case object UserInfo extends AnnotationPage
 case object Users extends AnnotationPage
 case object Import extends AnnotationPage
-case object AnnotatePage extends AnnotationPage
+case class AnnotatePage(rpp: ReviewPageProps) extends AnnotationPage
 case class PartialAnalysisEditor(state: EditableSentence = EditableSentence.defaultInstance)
     extends AnnotationPage
 case class SentenceListPage(search: String, skip: Int) extends AnnotationPage
@@ -100,7 +100,7 @@ object AnnotationTool {
             render(partialAnalysisImpl.PartialAnalyser(obj.state))
           }
 
-        val annotationImpl = SentenceAnnotation(as, uid)
+        val annotationImpl = SentenceAnnotation(as, uid, isAdmin)
 
         def viewSentence = {
           dynamicRouteCT[ViewSentence](
@@ -114,11 +114,22 @@ object AnnotationTool {
           }
         }
 
+
+        def annotateRoute = {
+          dynamicRouteCT[AnnotatePage](
+            ("#annotate" ~ ("?" ~ remainingPathOrBlank).option).xmap {
+              opt => AnnotatePage(ReviewPageProps.fromQueryString(opt))
+            } {
+              ap => ReviewPageProps.formatQueryString(ap.rpp)
+            }
+          ) ~> { par => render(annotationImpl.Page(par.rpp)) }
+        }
+
         (
           staticRoute(root, LandingPage) ~> render(Edits.Landing())
             | staticRoute("#userInfo", UserInfo) ~> render(UserPage(as).UserDisplay())
             | staticRoute("#import", Import) ~> render(SentenceImport.Importer(as))
-            | staticRoute("#annotate", AnnotatePage) ~> render(annotationImpl.Page())
+            | annotateRoute
             | sentenceList
             | viewSentence
             | partialAnalysis
