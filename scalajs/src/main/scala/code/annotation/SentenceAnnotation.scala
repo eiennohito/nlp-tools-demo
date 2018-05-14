@@ -10,7 +10,11 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
 class SentenceApi(api: ApiService, uid: ObjId) {
-  def fetchNextSentences(baseQuery: GetSentences, ignore: Seq[String], limit: Int = 15): Future[Seq[Sentence]] = {
+
+  def fetchNextSentences(
+      baseQuery: GetSentences,
+      ignore: Seq[String],
+      limit: Int = 15): Future[Seq[Sentence]] = {
     val msg = baseQuery.copy(
       exceptIds = ignore.distinct,
       limit = limit
@@ -74,6 +78,26 @@ class SentenceApi(api: ApiService, uid: ObjId) {
 
     api.sentenceCall[Review](call)
   }
+
+  def publishBadComment(
+      data: Sentence,
+      block: SentenceBlock,
+      comment: String,
+      focus: CandidateFocus): Unit = {
+    val msg = ReportAllBad(
+      sentenceId = data.id,
+      focusStart = focus.start,
+      focusEnd = if (focus.end <= 0) focus.start + 1 else focus.end,
+      comment = comment,
+      annotatorId = uid
+    )
+
+    val call = SentenceRequest(
+      SentenceRequest.Request.BothBad(msg)
+    )
+
+    api.sentenceCall[Annotation](call)
+  }
 }
 
 case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) {
@@ -115,6 +139,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
   case class CurrentSentence(
       data: Sentence,
       editable: Option[EditableSentence],
+      curBlock: Option[SentenceBlock],
       showedTimestamp: Long
   ) {
     def id = data.id
@@ -123,6 +148,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
   private def makeCurrent(s: Sentence) = {
     CurrentSentence(
       s,
+      None,
       None,
       System.currentTimeMillis()
     )
@@ -186,12 +212,28 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
     }
 
     def withEditable(blk: SentenceBlock): PageState = {
-      val curMod = current.map(x => x.copy(editable = Some(makeEditable(x.data))))
+      val curMod = current.map(
+        x =>
+          x.copy(
+            editable = Some(makeEditable(x.data)),
+            curBlock = Some(blk)
+        ))
       copy(current = curMod)
     }
 
     def clearEditable(): PageState = {
-      val curMod = current.map(_.copy(editable = None))
+      val curMod = current.map(_.copy(editable = None, curBlock = None))
+      copy(current = curMod)
+    }
+
+    def finishEditingWith(edited: Sentence): PageState = {
+      val curMod = current.map { c =>
+        c.copy(
+          data = edited,
+          editable = None,
+          curBlock = None
+        )
+      }
       copy(current = curMod)
     }
 
@@ -200,7 +242,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
         case x :: xs =>
           api.publishReview(x.id, uid)
           PageState(xs, Some(makeCurrent(x)))
-        case Nil     => PageState(Nil, None)
+        case Nil => PageState(Nil, None)
       }
     }
 
@@ -246,15 +288,15 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
       showNext: Callback,
       activateEdit: SentenceBlock => Callback,
       annotate: Annotate => Callback,
-    showCounts: Boolean
-    )
+      showCounts: Boolean
+  )
 
   case class BlockProps(
       block: SentenceBlock,
       id: String,
       activateEdit: SentenceBlock => Callback,
       annotate: Annotate => Callback,
-    showCounts: Boolean
+      showCounts: Boolean
   )
 
   class PageImplBackend(scope2: BackendScope[PageImplProps, Unit]) {
@@ -269,8 +311,28 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
       ev match {
         case AcceptEdit(s) => modState(_.mergeEdits(s, state))
         case CancelEdit    => modState(_.clearEditable())
-        case CommentEdit(cmt, ctx, span) => // scope.modState(_.markAllBad(cmt, ctx, span))
-          modState(_.clearEditable())
+        case CommentEdit(_, comment, span) => // scope.modState(_.markAllBad(cmt, ctx, span))
+          val curState = state.value.current.get //can't be None here
+          val block = curState.curBlock.get
+
+          val annMsg = Annotate(
+            sentenceId = curState.data.id,
+            offset = block.offset,
+            annotation = "両方間違い",
+            comment = comment
+          )
+
+          if (span.isDefined && comment.nonEmpty) {
+            api.publishBadComment(
+              curState.data,
+              block,
+              comment,
+              span.get
+            )
+          }
+
+          val edited = annotateImpl(annMsg, curState.data, curState.showedTimestamp)
+          modState(_.finishEditingWith(edited))
       }
     }
 
@@ -296,7 +358,10 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
     }
   }
 
-  case class PageImplProps(nextAction: Callback, state: StateSnapshot[PageState], showCounts: Boolean)
+  case class PageImplProps(
+      nextAction: Callback,
+      state: StateSnapshot[PageState],
+      showCounts: Boolean)
 
   val PageImpl = ScalaComponent
     .builder[PageImplProps]("PageImpl")
@@ -320,18 +385,21 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
       if (s.shouldGetNew) {
         val props = scope.props.runNow()
         Callback.future(
-          api.fetchNextSentences(props.search, s.ids).map(sents => scope.modState(_.addSentences(sents))))
+          api
+            .fetchNextSentences(props.search, s.ids)
+            .map(sents => scope.modState(_.addSentences(sents))))
       } else {
         Callback.empty
       }
     }
 
     def render(rpp: ReviewPageProps, st: PageState): VdomElement = {
-      PageImpl(PageImplProps(
-        handler(),
-        StateSnapshot(st)(y => scope.setState(y)),
-        rpp.showCounts && isAdmin
-      ))
+      PageImpl(
+        PageImplProps(
+          handler(),
+          StateSnapshot(st)(y => scope.setState(y)),
+          rpp.showCounts && isAdmin
+        ))
     }
   }
 
@@ -404,19 +472,30 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
     }
 
     private def renderEditBtn(annotation: Annotation) = {
+      val showCounts = scope.props.runNow().showCounts
+      val count = scope.props.runNow().block.annotations.count(_.value == "両方間違い")
+
       if (annotation.value == "両方間違い") {
         <.div(
-          ^.cls := "opt-block opt-other other-suboption ann-selection",
+          ^.cls := "other-suboption ann-selection opt-selected",
           ^.key := "opt-mis",
           ^.onClick --> annotateAs(annotation, "両方間違い"), //will clear annotation
-          "両方間違い"
+          "両方間違い",
+          <.span(
+            ^.cls := "token-ann-cnt",
+            count
+          ).when(showCounts && count != 0)
         )
       } else {
         <.div(
           ^.cls := "other-suboption other-edit",
           ^.key := "opt-mis",
           "詳細解析",
-          ^.onClick --> scope.props.flatMap(p => p.activateEdit(p.block))
+          ^.onClick --> scope.props.flatMap(p => p.activateEdit(p.block)),
+          <.span(
+            ^.cls := "token-ann-cnt",
+            count
+          ).when(showCounts && count != 0)
         )
       }
     }
@@ -526,7 +605,8 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
         <.div(
           ^.cls := "parts",
           s.blocks
-            .map(b => BlockView(BlockProps(b, s.id, state.activateEdit, state.annotate, state.showCounts)))
+            .map(b =>
+              BlockView(BlockProps(b, s.id, state.activateEdit, state.annotate, state.showCounts)))
             .toTagMod
         ),
         <.div(
@@ -544,13 +624,25 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
   sealed trait SentenceEditEvent
   case class AcceptEdit(data: EditableSentence) extends SentenceEditEvent
   case object CancelEdit extends SentenceEditEvent
-  case class CommentEdit(comment: String, context: String, span: Option[CandidateFocus])
+  case class CommentEdit(status: String, comment: String, span: Option[CandidateFocus])
       extends SentenceEditEvent
   case class ExampleEditorProps(sentence: EditableSentence, callback: SentenceEditEvent => Callback)
 
-  class EditorFrameBackend(scope: BackendScope[ExampleEditorProps, SentenceWithFocus]) {
-    def render(sent: SentenceWithFocus, props: ExampleEditorProps) = {
-      val snap = StateSnapshot(sent)(s => scope.setState(s))
+  case class EditorFrameState(
+      sentence: EditableSentence,
+      comment: String,
+      focus: Option[CandidateFocus]
+  )
+
+  class EditorFrameBackend(scope: BackendScope[ExampleEditorProps, EditorFrameState]) {
+    def render(state: EditorFrameState, props: ExampleEditorProps) = {
+      val snap = StateSnapshot(SentenceWithFocus(state.sentence, state.focus))(
+        s =>
+          scope.modState(
+            _.copy(
+              sentence = s.sentence,
+              focus = s.focus
+            )))
       val cback = props.callback
 
       <.div(
@@ -558,15 +650,23 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
         partialEditor.AnalysisEditor(snap)(
           <.button(
             "Apply",
-            ^.onClick --> cback(AcceptEdit(sent.sentence))
+            ^.onClick --> cback(AcceptEdit(state.sentence))
           ),
           <.button(
             "Cancel",
             ^.onClick --> cback(CancelEdit)
           ),
+          <.input.text(
+            ^.value := state.comment,
+            ^.placeholder := "Comment",
+            ^.onChange ==> { e: ReactEventFromInput =>
+              val comment = e.target.value
+              scope.modState(_.copy(comment = comment))
+            }
+          ),
           <.button(
             "Reject",
-            ^.onClick --> cback(CommentEdit("Reject", "", sent.focus))
+            ^.onClick --> cback(CommentEdit("Reject", state.comment, state.focus))
           )
         )
       )
@@ -575,7 +675,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
 
   val EditorFrame = ScalaComponent
     .builder[ExampleEditorProps]("EditorFrame")
-    .initialStateFromProps(p => SentenceWithFocus(p.sentence, None))
+    .initialStateFromProps(p => EditorFrameState(p.sentence, "", None))
     .backend(s => new EditorFrameBackend(s))
     .renderBackend
     .build

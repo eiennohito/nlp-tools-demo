@@ -153,8 +153,10 @@ case class SentenceList(apiBackend: ApiService, uid: ObjId, admin: Boolean) {
           ),
           ^.onSubmit --> CallbackTo(false)
         ),
-        AnnotationTool.routectCtl.link(AnnotatePage(ReviewPageProps(false,
-          GetSentences(query = query, reviewedBefore = Some(Timestamps.now)))))(
+        AnnotationTool.routectCtl.link(
+          AnnotatePage(
+            ReviewPageProps(false,
+                            GetSentences(query = query, reviewedBefore = Some(Timestamps.now)))))(
           "Review"
         )
       )

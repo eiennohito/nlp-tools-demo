@@ -9,12 +9,28 @@ import controllers.AllowedFields
 import javax.inject.{Inject, Singleton}
 import net.codingwell.scalaguice.ScalaModule
 import org.apache.commons.lang3.RandomUtils
+import org.joda.time.DateTime
 import play.api.Configuration
+import play.api.mvc.Result
 import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.api.commands.UpdateWriteResult
 import reactivemongo.api.{Cursor, DefaultDB, MongoConnection}
 import reactivemongo.bson.Macros.Annotations.Key
-import reactivemongo.bson.{BSON, BSONArray, BSONDateTime, BSONDocument, BSONDocumentHandler, BSONDouble, BSONElement, BSONHandler, BSONInteger, BSONObjectID, BSONRegex, BSONValue, Macros}
+import reactivemongo.bson.{
+  BSON,
+  BSONArray,
+  BSONDateTime,
+  BSONDocument,
+  BSONDocumentHandler,
+  BSONDouble,
+  BSONElement,
+  BSONHandler,
+  BSONInteger,
+  BSONObjectID,
+  BSONRegex,
+  BSONValue,
+  Macros
+}
 import scalapb.{GeneratedEnum, GeneratedEnumCompanion}
 import ws.kotonoha.akane.utils.XInt
 
@@ -195,6 +211,16 @@ class AnnotationAuth(db: AnnotationDb)(implicit ec: ExecutionContext) {
   }
 }
 
+case class BadStatusComment(
+    @Key("_id") id: String,
+    dateTime: DateTime,
+    sentence: String,
+    part: String,
+    offset: Int,
+    comment: String,
+    annotatorId: String
+)
+
 object SentenceBSON {
   def enumFormat[T <: GeneratedEnum](
       implicit comp: GeneratedEnumCompanion[T]): BSONHandler[BSONInteger, T] =
@@ -263,11 +289,21 @@ object SentenceBSON {
   implicit val reviewFormat: BSONDocumentHandler[Review] = Macros.handler[Review]
   implicit val sentenceFormat: BSONDocumentHandler[Sentence] = Macros.handler[Sentence]
 
-  case class SentenceIdReviews(@Key("_id")id: String, reviews: Seq[Review])
+  case class SentenceIdReviews(@Key("_id") id: String, reviews: Seq[Review])
   implicit val sirFormat: BSONDocumentHandler[SentenceIdReviews] = Macros.handler[SentenceIdReviews]
+
+  implicit val dateTimeHandler: BSONHandler[BSONDateTime, DateTime] =
+    new BSONHandler[BSONDateTime, DateTime] {
+      override def read(bson: BSONDateTime): DateTime = new DateTime(bson.value)
+      override def write(t: DateTime): BSONDateTime = BSONDateTime(t.getMillis)
+    }
+
+  implicit val badStatusCommentFormat: BSONDocumentHandler[BadStatusComment] =
+    Macros.handler[BadStatusComment]
 }
 
 class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) extends StrictLogging {
+
   private val coll = db.db.collection[BSONCollection]("sentences")
 
   import SentenceBSON._
@@ -548,7 +584,8 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
         )
       )
 
-      coll.update(query, update)
+      coll
+        .update(query, update)
         .flatMap(_ => publishReview(uid, req.sentenceId))
         .map(_ => newAnnotation)
     }
@@ -570,7 +607,8 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
         status = SentenceUtils.computeStatus(s)
       )
 
-      coll.update(q, sentenceFormat.write(updated))
+      coll
+        .update(q, sentenceFormat.write(updated))
         .flatMap(_ => publishReview(uid, req.sentenceId))
         .map(_ => updated)
     }
@@ -581,6 +619,28 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
       "_id" -> id
     )
     coll.find(q).one[Sentence]
+  }
+
+  private val badColl = db.db.collection[BSONCollection]("badcomments")
+
+  def saveBadLog(uid: BSONObjectID, req: ReportAllBad): Future[BadStatusComment] = {
+    val sent = findById(req.sentenceId)
+    sent.flatMap {
+      case None => Future.failed(new Exception("no sentence exist"))
+      case Some(s) =>
+        val surface = s.blocks.flatMap(_.spans.head.tokens.map(_.surface)).mkString
+        val focus = surface.substring(req.focusStart, req.focusEnd)
+        val obj = BadStatusComment(
+          id = BSONObjectID.generate().stringify,
+          dateTime = DateTime.now(),
+          sentence = surface,
+          part = focus,
+          offset = req.focusStart,
+          comment = req.comment,
+          annotatorId = uid.stringify
+        )
+        coll.insert(obj).map(_ => obj)
+    }
   }
 }
 

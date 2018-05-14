@@ -114,15 +114,16 @@ object AnnotationTool {
           }
         }
 
-
         def annotateRoute = {
           dynamicRouteCT[AnnotatePage](
-            ("#annotate" ~ ("?" ~ remainingPathOrBlank).option).xmap {
-              opt => AnnotatePage(ReviewPageProps.fromQueryString(opt))
-            } {
-              ap => ReviewPageProps.formatQueryString(ap.rpp)
+            ("#annotate" ~ ("?" ~ remainingPathOrBlank).option).xmap { opt =>
+              AnnotatePage(ReviewPageProps.fromQueryString(opt))
+            } { ap =>
+              ReviewPageProps.formatQueryString(ap.rpp)
             }
-          ) ~> { par => render(annotationImpl.Page(par.rpp)) }
+          ) ~> { par =>
+            render(annotationImpl.Page(par.rpp))
+          }
         }
 
         (

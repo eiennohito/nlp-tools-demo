@@ -36,6 +36,13 @@ class SentenceApiController @Inject()(
           BSONObjectID.parse(req.annotatorId.id).getOrElse(user._id)
         } else user._id
         dbo.publishReview(uid, req.sentenceId).map(r => Ok(LiftPB(r)))
+      case SentenceRequest.Request.BothBad(req) =>
+        val uid = if (user.admin) {
+          BSONObjectID.parse(req.annotatorId.id).getOrElse(user._id)
+        } else user._id
+        dbo.saveBadLog(uid, req).map { _ =>
+          Ok(LiftPB(Annotation()))
+        }
       case _ => Future.successful(NotImplemented)
     }
   }

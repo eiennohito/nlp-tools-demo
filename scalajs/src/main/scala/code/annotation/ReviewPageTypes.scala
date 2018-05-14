@@ -3,8 +3,8 @@ package code.annotation
 import scala.scalajs.js.URIUtils
 
 case class ReviewPageProps(
-  showCounts: Boolean,
-  search: GetSentences
+    showCounts: Boolean,
+    search: GetSentences
 )
 
 object ReviewPageProps {
@@ -43,14 +43,17 @@ object ReviewPageProps {
 
       val date = new scala.scalajs.js.Date(obj.seconds * 1000)
       bldr.append("before=")
-      bldr.append("%04d-%02d-%02d-%02d-%02d-%02d".format(
-        date.getFullYear(),
-        date.getMonth() + 1,
-        date.getDate(),
-        date.getHours(),
-        date.getMinutes(),
-        date.getSeconds()
-      )).append("&")
+      bldr
+        .append(
+          "%04d-%02d-%02d-%02d-%02d-%02d".format(
+            date.getFullYear(),
+            date.getMonth() + 1,
+            date.getDate(),
+            date.getHours(),
+            date.getMinutes(),
+            date.getSeconds()
+          ))
+        .append("&")
     }
 
     bldr.append("data=none")
@@ -66,8 +69,8 @@ object ReviewPageProps {
     for (p <- parts) {
       p.split("=") match {
         case Array("cnts", YInt(v)) => showCounts = v != 0
-        case Array("nfu", YInt(v)) => query = query.copy(newForUser = v != 0)
-        case Array("q", qs) => query = query.copy(query = URIUtils.decodeURIComponent(qs))
+        case Array("nfu", YInt(v))  => query = query.copy(newForUser = v != 0)
+        case Array("q", qs)         => query = query.copy(query = URIUtils.decodeURIComponent(qs))
         case Array("before", dateString) =>
           val dateParts = dateString.split("-").flatMap(YInt.unapply)
           dateParts match {
@@ -82,14 +85,15 @@ object ReviewPageProps {
     }
 
     ReviewPageProps(
-      showCounts, query
+      showCounts,
+      query
     )
   }
 
   def fromQueryString(param: Option[String]): ReviewPageProps = {
     param match {
       case None | Some("") => ReviewPageProps.default
-      case Some(s) => doParseString(s)
+      case Some(s)         => doParseString(s)
     }
   }
 }

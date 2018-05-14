@@ -71,6 +71,7 @@ message SentenceRequest {
         Annotate annotate = 2;
         MergeEdits merge = 3;
         ReviewSentence review = 4;
+        ReportAllBad bothBad = 5;
     }
 }
 
@@ -98,4 +99,12 @@ message MergeEdits {
 message ReviewSentence {
     string sentenceId = 1;
     string annotatorId = 2 [(scalapb.field).type = "ObjId"];
+}
+
+message ReportAllBad {
+    string sentenceId = 1;
+    int32 focusStart = 2;
+    int32 focusEnd = 3;
+    string comment = 4;
+    string annotatorId = 5 [(scalapb.field).type = "ObjId"];
 }

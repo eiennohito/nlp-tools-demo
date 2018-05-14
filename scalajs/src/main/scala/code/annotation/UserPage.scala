@@ -51,22 +51,32 @@ case class UserPage(apisvc: ApiService) {
 
 object Edits {
 
+  val TextField = ScalaComponent
+    .builder[StateSnapshot[String]](displayName = "TextField")
+    .stateless
+    .noBackend
+    .render_P { props =>
+      <.input.text(
+        ^.value := props.value,
+        ^.onChange ==> ((e: ReactEventFromInput) => props.setState(e.target.value))
+      )
+    }
+    .build
+
   val Field = ScalaComponent
     .builder[(String, StateSnapshot[String])]("Field")
     .stateless
     .noBackend
     .render_P {
       case (label, state) =>
-        val id = label.hashCode().toString
+        val id = s"textfld-${label.hashCode().toHexString}"
         <.div(
           <.label(
             ^.`for` := id,
             label
           ),
-          <.input.text(
-            ^.name := id,
-            ^.value := state.value,
-            ^.onChange ==> ((e: ReactEventFromInput) => state.setState(e.target.value))
+          TextField(state)(
+            ^.name := id
           )
         )
     }
