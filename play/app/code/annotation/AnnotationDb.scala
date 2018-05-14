@@ -639,7 +639,7 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
           comment = req.comment,
           annotatorId = uid.stringify
         )
-        coll.insert(obj).map(_ => obj)
+        badColl.insert(obj).map(_ => obj)
     }
   }
 }

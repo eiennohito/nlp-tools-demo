@@ -264,7 +264,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
           scope
             .modState { p =>
               val newCur = p.current match {
-                case Some(s3) if s3.data.id == s2.id => Some(s3.copy(data = s2))
+                case Some(s3) if s3.data.id == s2.id => Some(s3.copy(data = s2, editable = None, curBlock = None))
                 case y                               => y
               }
               p.copy(current = newCur)
@@ -272,7 +272,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
             .runNow()
         }
 
-        s.copy(data = merged, editable = None)
+        s.copy(data = merged, editable = None, curBlock = None)
       }
 
       copy(current = curMod)
