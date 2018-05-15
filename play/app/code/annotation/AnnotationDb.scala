@@ -304,6 +304,20 @@ object SentenceBSON {
 
 class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) extends StrictLogging {
 
+  def findAlreadyReported(surfaceComment: String): Future[Option[String]] = {
+    val q = BSONDocument(
+      "tags" -> "report",
+      "originalComments" -> surfaceComment
+    )
+
+    val proj = BSONDocument("_id" -> 1)
+
+    coll.find(q, proj).one.map {
+      case Some(doc) => doc.getAs[String]("_id")
+      case _         => None
+    }
+  }
+
   private val coll = db.db.collection[BSONCollection]("sentences")
 
   import SentenceBSON._
@@ -603,8 +617,8 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
 
       val updated = merged.copy(
         blocks = SentenceUtils.cleanTags(merged.blocks, AllowedFields.allowedFields),
-        numAnnotations = SentenceUtils.numAnnotations(s),
-        status = SentenceUtils.computeStatus(s)
+        numAnnotations = SentenceUtils.numAnnotations(merged),
+        status = SentenceUtils.computeStatus(merged)
       )
 
       coll

@@ -60,6 +60,11 @@ class Annotation @Inject()(
   def logout() = Action { implicit req =>
     Redirect(routes.Annotation.default()).withNewSession
   }
+
+  def anonEdit() = Action { implicit req =>
+    val user = req.attrs.get(SessionUser.User)
+    Ok(views.html.annotation.atoolAnaEdit(user))
+  }
 }
 
 class LiftPB[T <: GeneratedMessage](val message: T)

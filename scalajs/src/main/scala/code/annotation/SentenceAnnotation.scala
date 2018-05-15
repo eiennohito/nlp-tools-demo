@@ -398,7 +398,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
       PageImpl(
         PageImplProps(
           handler(),
-          StateSnapshot(st)(y => scope.setState(y)),
+          MyStateSnapshot(st)(y => scope.setState(y)),
           rpp.showCounts && isAdmin
         ))
     }
@@ -637,7 +637,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
 
   class EditorFrameBackend(scope: BackendScope[ExampleEditorProps, EditorFrameState]) {
     def render(state: EditorFrameState, props: ExampleEditorProps) = {
-      val snap = StateSnapshot(SentenceWithFocus(state.sentence, state.focus))(
+      val snap = MyStateSnapshot(SentenceWithFocus(state.sentence, state.focus))(
         s =>
           scope.modState(
             _.copy(
@@ -707,7 +707,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
         case Some(scala.util.Success(Some(s))) =>
           val props = PageImplProps(
             Callback.empty,
-            StateSnapshot(s) { s =>
+            MyStateSnapshot(s) { s =>
               scope.setState(
                 state.copy(data = Future.successful(Some(s)))
               )

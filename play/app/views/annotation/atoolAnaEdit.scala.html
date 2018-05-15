@@ -1,0 +1,19 @@
+@import code.annotation.AnnotationToolUser
+
+@(u: Option[AnnotationToolUser])(implicit req: RequestHeader)
+
+@views.html.annotation.wrapper("Juman++ Analysis Editor") {
+    <script src="/assets/javascripts/atool-entry.js"
+    type="application/javascript"
+    ></script>
+    <link rel="stylesheet" media="screen" href="@routes.Assets.at("stylesheets/main.css")">
+    <div id="analysis-editor"
+         data-entry-url="@routes.AnnotationApi.root()"
+         data-csrf-token="@helper.CSRF.getToken.value"
+         @for(user <- u) {
+            data-uid="@user._id.stringify"
+         }
+    >
+        <p>This block should be replaced by React!</p>
+    </div>
+}

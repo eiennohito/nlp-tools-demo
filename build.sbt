@@ -36,29 +36,28 @@ lazy val scalajsclient = (project in file("scalajs")).settings(
   libraryDependencies ++= Seq(
     "org.scala-js" %%% "scalajs-dom" % "0.9.4",
     "com.lihaoyi" %%% "scalatags" % "0.6.7",
-    "com.github.japgolly.scalajs-react" %%% "core" % "1.1.1",
-    "com.github.japgolly.scalajs-react" %%% "extra" % "1.1.1",
-    "com.github.japgolly.scalajs-react" %%% "ext-monocle" % "1.1.1",
+    "com.github.japgolly.scalajs-react" %%% "core" % "1.2.0",
+    "com.github.japgolly.scalajs-react" %%% "extra" % "1.2.0"
   ),
   jsDependencies ++= Seq(
     "org.webjars.npm" % "dagre-d3" % "0.4.17" / "dist/dagre-d3.js" minified "dist/dagre-d3.min.js",
-    "org.webjars.npm" % "d3" % "3.5.17" / "3.5.17/d3.js" minified "3.5.17/d3.min.js",
+    "org.webjars.npm" % "d3" % "5.1.0" / "dist/d3.js" minified "dist/d3.min.js",
     "org.webjars" % "jquery" % "2.1.3" / "2.1.3/jquery.js" minified "2.1.3/jquery.min.js",
-    "org.webjars.bower" % "react" % "15.3.2"
-      /        "react-with-addons.js"
-      minified "react-with-addons.min.js"
+    "org.webjars.npm" % "react" % "16.2.0"
+      /        "umd/react.development.js"
+      minified "umd/react.production.min.js"
       commonJSName "React",
 
-    "org.webjars.bower" % "react" % "15.3.2"
-      /         "react-dom.js"
-      minified  "react-dom.min.js"
-      dependsOn "react-with-addons.js"
+    "org.webjars.npm" % "react-dom" % "16.2.0"
+      /         "umd/react-dom.development.js"
+      minified  "umd/react-dom.production.min.js"
+      dependsOn "umd/react.development.js"
       commonJSName "ReactDOM",
 
-    "org.webjars.bower" % "react" % "15.3.2"
-      /         "react-dom-server.js"
-      minified  "react-dom-server.min.js"
-      dependsOn "react-dom.js"
+    "org.webjars.npm" % "react-dom" % "16.2.0"
+      /         "umd/react-dom-server.browser.development.js"
+      minified  "umd/react-dom-server.browser.production.min.js"
+      dependsOn "umd/react-dom.development.js"
       commonJSName "ReactDOMServer"
   )
 ).enablePlugins(ScalaJSPlugin, ScalaJSWeb).

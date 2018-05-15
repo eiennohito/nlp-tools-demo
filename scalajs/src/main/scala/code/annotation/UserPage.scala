@@ -4,6 +4,7 @@ import code.annotation.Edits.Field
 import japgolly.scalajs.react._
 import japgolly.scalajs.react.component.builder.Lifecycle.StateRW
 import japgolly.scalajs.react.extra.StateSnapshot
+import japgolly.scalajs.react.internal.Effect.Id
 import japgolly.scalajs.react.vdom.html_<^._
 
 import scala.concurrent.Future
@@ -134,18 +135,24 @@ object Futures {
 object Lenses {
 
   implicit class ScalapbScopeSupport[T](val s: StateRW[_, T, _]) extends AnyVal {
+    @inline
     def zoom[R](f: scalapb.lenses.Lens[T, T] => scalapb.lenses.Lens[T, R]): StateSnapshot[R] = {
       val l = f(scalapb.lenses.Lens.unit[T])
-      val modify: (T => T) => Callback = fn => s.modState(fn)
-      StateSnapshot.zoom[T, R](l.get)(l.set).apply(s.state).apply(modify)
+      StateSnapshot.of(s).zoomState(l.get)(l.set _)
     }
   }
 
   implicit class BackendScopeSupport[T](val s: BackendScope[_, T]) extends AnyVal {
+    @inline
     def zoom[R](f: scalapb.lenses.Lens[T, T] => scalapb.lenses.Lens[T, R]): StateSnapshot[R] = {
-      val l = f(scalapb.lenses.Lens.unit[T])
-      val modify: (T => T) => Callback = fn => s.modState(fn)
-      StateSnapshot.zoom[T, R](l.get)(l.set).apply(s.state.runNow()).apply(modify)
+      val lens = f(scalapb.lenses.Lens.unit[T])
+      val state = s.state.runNow()
+      StateSnapshot(lens.get(state)) { (in, cb) =>
+        s.modStateOption(v =>
+          in.map { x =>
+            lens.set(x)(v)
+        }) >> cb
+      }
     }
   }
 }

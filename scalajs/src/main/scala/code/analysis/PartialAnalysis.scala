@@ -1,18 +1,15 @@
 package code.analysis
 
-import code.annotation.{AnnotationTool, ApiService, Edits, PartialAnalysisEditor}
+import code.annotation._
 import code.transport.lattice._
 import japgolly.scalajs.react._
-import japgolly.scalajs.react.component.builder.Lifecycle
-import japgolly.scalajs.react.extra.{LogLifecycle, StateSnapshot}
-import japgolly.scalajs.react.extra.router.{RouterConfig, RouterCtl}
+import japgolly.scalajs.react.extra.StateSnapshot
 import japgolly.scalajs.react.vdom.html_<^._
 import org.scalajs.dom.Event
 import org.scalajs.dom.raw.Selection
 
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
 
 class PartSeqBuilder {
   private val simpleNodeData = new java.lang.StringBuilder
@@ -447,10 +444,10 @@ case class PartialAnalysis(api: ApiService) {
 
       <.div(
         if (state.sentence.parts.isEmpty) {
-          val snap = StateSnapshot("")(v => updateStateAndUrl(makeEditableSentence(v)))
+          val snap = MyStateSnapshot("")(v => updateStateAndUrl(makeEditableSentence(v)))
           InputString(snap)
         } else {
-          val snap = StateSnapshot(state)(updateStateAndUrl)
+          val snap = MyStateSnapshot(state)(updateStateAndUrl)
           AnalysisEditor(snap)(
             <.button("Reset",
                      ^.onClick --> updateStateAndUrl(

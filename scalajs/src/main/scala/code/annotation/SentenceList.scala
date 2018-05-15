@@ -146,7 +146,7 @@ case class SentenceList(apiBackend: ApiService, uid: ObjId, admin: Boolean) {
       <.div(
         ^.cls := "search-form",
         <.form(
-          Edits.Field(("", StateSnapshot(query)(s => scope.modState(_.copy(search = s))))),
+          Edits.Field(("", MyStateSnapshot(query)(s => scope.modState(_.copy(search = s))))),
           <.input.submit(
             AnnotationTool.routectCtl.setOnClick(SentenceListPage(query, skip)),
             ^.value := "Search"

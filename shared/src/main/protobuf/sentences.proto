@@ -108,3 +108,7 @@ message ReportAllBad {
     string comment = 4;
     string annotatorId = 5 [(scalapb.field).type = "ObjId"];
 }
+
+message ReportInvalidResult {
+    EditableSentence sentence = 1;
+}

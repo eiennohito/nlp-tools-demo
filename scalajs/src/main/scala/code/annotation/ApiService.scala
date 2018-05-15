@@ -65,65 +65,13 @@ class JsTypedArrayInputStream(buf: Int8Array) extends InputStream {
 
 case class WebsocketConnection[Fn](fn: Fn, socket: WebSocket)
 
-class ApiService(apiUrl: String, csrfToken: String)(implicit ec: ExecutionContext) {
-  def userListCommand(cmd: AnnotationUserCommand): Future[Seq[AnnotationUser]] = {
-    import scala.scalajs.js.typedarray._
-
-    val requestPath = s"$apiUrl/users"
-    val obj = cmd.toByteArray
-    val u8arr = obj.toTypedArray
-    val src: BufferSource = u8arr
-
-    Fetch
-      .fetch(
-        requestPath,
-        RequestInit(
-          credentials = RequestCredentials.include,
-          method = HttpMethod.POST,
-          headers = Dictionary.apply(
-            "Content-Type" -> "application/x-protobuf",
-            "Csrf-Token" -> csrfToken
-          ),
-          body = src
-        )
-      )
-      .toFuture
-      .flatMap { resp =>
-        if (resp.ok && resp.headers.get("Content-Type").get == "application/x-protobuf") {
-          resp.arrayBuffer().toFuture.map { ab =>
-            val buf = new Int8Array(ab)
-            AllUsers.parseFrom(new JsTypedArrayInputStream(buf)).users
-          }
-        } else {
-          Future.failed(new RuntimeException("request failed"))
-        }
-      }
-  }
-
-  def sentenceCall[R <: GeneratedMessage with Message[R]](cmd: SentenceRequest)(
-      implicit comp: GeneratedMessageCompanion[R]): Future[R] = {
-    import scala.scalajs.js.typedarray._
-
-    val requestPath = s"$apiUrl/sentences"
-    val obj = cmd.toByteArray
-    val u8arr = obj.toTypedArray
-    val src: BufferSource = u8arr
-
-    Fetch
-      .fetch(
-        requestPath,
-        RequestInit(
-          credentials = RequestCredentials.include,
-          method = HttpMethod.POST,
-          headers = Dictionary.apply(
-            "Content-Type" -> "application/x-protobuf",
-            "Csrf-Token" -> csrfToken
-          ),
-          body = src
-        )
-      )
-      .toFuture
-      .flatMap { resp =>
+object ApiService {
+  implicit class RichFutureResponce(val fut: Future[Response]) extends AnyVal {
+    @inline
+    def as[T <: GeneratedMessage with Message[T]](
+        implicit comp: GeneratedMessageCompanion[T],
+        ec: ExecutionContext): Future[T] = {
+      fut.flatMap { resp =>
         if (resp.ok && resp.headers.get("Content-Type").get == "application/x-protobuf") {
           resp.arrayBuffer().toFuture.map { ab =>
             val buf = new Int8Array(ab)
@@ -133,6 +81,58 @@ class ApiService(apiUrl: String, csrfToken: String)(implicit ec: ExecutionContex
           Future.failed(new RuntimeException("request failed"))
         }
       }
+    }
+  }
+}
+
+class ApiService(apiUrl: String, csrfToken: String)(implicit ec: ExecutionContext) {
+  import ApiService._
+
+  def postProtobuf(requestPath: String, msg: GeneratedMessage): Future[Response] = {
+    import scala.scalajs.js.typedarray._
+    val bytes = msg.toByteArray
+    val u8arr = bytes.toTypedArray
+    val src: BufferSource = u8arr
+    Fetch
+      .fetch(
+        requestPath,
+        RequestInit(
+          credentials = RequestCredentials.include,
+          method = HttpMethod.POST,
+          headers = Dictionary.apply(
+            "Content-Type" -> "application/x-protobuf",
+            "Csrf-Token" -> csrfToken
+          ),
+          body = src
+        )
+      )
+      .toFuture
+  }
+
+  def postProtobufAs[T <: GeneratedMessage with Message[T]](
+      requestPath: String,
+      msg: GeneratedMessage)(implicit comp: GeneratedMessageCompanion[T]): Future[T] = {
+    postProtobuf(requestPath, msg).as[T]
+  }
+
+  def userListCommand(cmd: AnnotationUserCommand): Future[Seq[AnnotationUser]] = {
+    val requestPath = s"$apiUrl/users"
+    postProtobuf(requestPath, cmd).flatMap { resp =>
+      if (resp.ok && resp.headers.get("Content-Type").get == "application/x-protobuf") {
+        resp.arrayBuffer().toFuture.map { ab =>
+          val buf = new Int8Array(ab)
+          AllUsers.parseFrom(new JsTypedArrayInputStream(buf)).users
+        }
+      } else {
+        Future.failed(new RuntimeException("request failed"))
+      }
+    }
+  }
+
+  def sentenceCall[R <: GeneratedMessage with Message[R]](cmd: SentenceRequest)(
+      implicit comp: GeneratedMessageCompanion[R]): Future[R] = {
+    val requestPath = s"$apiUrl/sentences"
+    postProtobuf(requestPath, cmd).as[R]
   }
 
   def user(): Future[AnnotationUser] = {
@@ -149,59 +149,13 @@ class ApiService(apiUrl: String, csrfToken: String)(implicit ec: ExecutionContex
   }
 
   def updateUser(user: AnnotationUser): Future[AnnotationUser] = {
-    import scala.scalajs.js.typedarray._
     val requestPath = s"$apiUrl/user"
-    val obj = user.toByteArray
-    val u8arr = obj.toTypedArray
-    val src: BufferSource = u8arr
-    Fetch
-      .fetch(
-        requestPath,
-        RequestInit(
-          credentials = RequestCredentials.include,
-          method = HttpMethod.POST,
-          headers = Dictionary.apply(
-            "Content-Type" -> "application/x-protobuf",
-            "Csrf-Token" -> csrfToken
-          ),
-          body = src
-        )
-      )
-      .toFuture
-      .flatMap { resp =>
-        resp.arrayBuffer().toFuture.map { ab =>
-          val buf = new Int8Array(ab)
-          AnnotationUser.parseFrom(new JsTypedArrayInputStream(buf))
-        }
-      }
+    postProtobuf(requestPath, user).as[AnnotationUser]
   }
 
   def partialQuery(q: PartialAnalysisQuery): Future[LatticeSubset] = {
-    import scala.scalajs.js.typedarray._
     val requestPath = s"$apiUrl/pana"
-    val obj = q.toByteArray
-    val u8arr = obj.toTypedArray
-    val src: BufferSource = u8arr
-    Fetch
-      .fetch(
-        requestPath,
-        RequestInit(
-          credentials = RequestCredentials.include,
-          method = HttpMethod.POST,
-          headers = Dictionary.apply(
-            "Content-Type" -> "application/x-protobuf",
-            "Csrf-Token" -> csrfToken
-          ),
-          body = src
-        )
-      )
-      .toFuture
-      .flatMap { resp =>
-        resp.arrayBuffer().toFuture.map { ab =>
-          val buf = new Int8Array(ab)
-          LatticeSubset.parseFrom(new JsTypedArrayInputStream(buf))
-        }
-      }
+    postProtobuf(requestPath, q).as[LatticeSubset]
   }
 
   def importWsCall(onMessage: String => Unit): WebSocket = {
@@ -238,4 +192,11 @@ class ApiService(apiUrl: String, csrfToken: String)(implicit ec: ExecutionContex
       }
     }
   }
+
+  def reportAnalysisResult(msg: ReportInvalidResult): Future[String] = {
+    postProtobuf(s"$apiUrl/report", msg).flatMap { resp =>
+      resp.text().toFuture
+    }
+  }
+
 }

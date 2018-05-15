@@ -55,6 +55,13 @@ object AnnotationTool {
     wrapper(router()).renderIntoDOM(elem)
   }
 
+  @JSExport
+  def anonEditor(url: String, elem: Element, csrfToken: String, uid: String): Unit = {
+    val apisvc = new ApiService(url, csrfToken)
+    val anonEdit = AnonEdit(apisvc, Option(uid))
+    anonEdit.Page(AnonEditProps(AnonEdit.getState())).renderIntoDOM(elem)
+  }
+
   private def routerConfig(as: ApiService, isAdmin: Boolean, uid: ObjId)(
       implicit ec: ExecutionContext) = {
     RouterConfigDsl[AnnotationPage]
