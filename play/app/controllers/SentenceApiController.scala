@@ -323,7 +323,8 @@ class SentenceReportService @Inject()(
             surfaceComment
           ),
           tags = Seq(
-            "report"
+            "report",
+            s"@$reporter"
           ),
           importedOn = Some(Timestamps.now)
         )
