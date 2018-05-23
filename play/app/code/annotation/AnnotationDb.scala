@@ -482,13 +482,13 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
           "$ne" -> user._id
         )
       )
-      if (req.query == "") {
-        q = q.merge(
-          "status" -> BSONDocument(
-            "$ne" -> SentenceStatus.Rejected.value
-          )
-        )
-      }
+//      if (req.query == "") {
+//        q = q.merge(
+//          "status" -> BSONDocument(
+//            "$ne" -> SentenceStatus.Rejected.value
+//          )
+//        )
+//      }
     }
 
     if (req.reviewedBefore.isDefined) {
