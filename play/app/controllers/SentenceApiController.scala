@@ -1,9 +1,8 @@
 package controllers
 
-import java.time.{Instant, LocalDateTime}
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
-import javax.inject.Inject
 import code.annotation._
 import code.transport.lattice.{
   CandidateNode,
@@ -12,6 +11,7 @@ import code.transport.lattice.{
   PartialAnalysisQuery
 }
 import com.typesafe.scalalogging.StrictLogging
+import javax.inject.Inject
 import play.api.mvc.{InjectedController, Result}
 import reactivemongo.bson.BSONObjectID
 import ws.kotonoha.akane.analyzers.jumanpp.wire.lattice.LatticeDump
@@ -21,11 +21,14 @@ import scala.concurrent.{ExecutionContext, Future}
 
 class SentenceApiController @Inject()(
     dbo: SentenceDbo,
+    objLog: LogDbo,
     reportSvc: SentenceReportService
 )(implicit ec: ExecutionContext)
     extends InjectedController {
 
   def doHandle(body: SentenceRequest, user: AnnotationToolUser): Future[Result] = {
+    objLog.log(body, user)
+
     body.request match {
       case SentenceRequest.Request.Sentences(sents) =>
         dbo.getSentences(user, sents).map(sents => Ok(LiftPB(sents)))
@@ -54,6 +57,14 @@ class SentenceApiController @Inject()(
         } else user._id
         dbo.saveBadLog(uid, req).map { _ =>
           Ok(LiftPB(Annotation()))
+        }
+      case SentenceRequest.Request.RecalcStatuses(_) =>
+        if (user.admin) {
+          dbo.recalcStatuses().map { _ =>
+            Ok(LiftPB(Annotation()))
+          }
+        } else {
+          Future.successful(Forbidden("You are not admin"))
         }
       case _ => Future.successful(NotImplemented)
     }
@@ -94,13 +105,13 @@ class BlockSeqBuilder {
   private val blocks = new ArrayBuffer[SentenceBlock]()
 
   private def addNode(node: CandidateNode) = {
-    if (nodes.isEmpty || (nodes.last.ne(node))) {
+    if (nodes.isEmpty || nodes.last.ne(node)) {
       nodes += node
     }
   }
 
   private def addPart(part: EditableSentencePart) = {
-    if (parts.isEmpty || (parts.last.ne(part))) {
+    if (parts.isEmpty || parts.last.ne(part)) {
       parts += part
     }
   }

@@ -38,6 +38,7 @@ enum SentenceStatus {
     TotalAgreement = 1;
     PartialAgreement = 2;
     WorkRequired = 3;
+    Rejected = 4;
 }
 
 message Review {
@@ -72,6 +73,7 @@ message SentenceRequest {
         MergeEdits merge = 3;
         ReviewSentence review = 4;
         ReportAllBad bothBad = 5;
+        int32 recalcStatuses = 6;
     }
 }
 

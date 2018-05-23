@@ -11,7 +11,6 @@ import net.codingwell.scalaguice.ScalaModule
 import org.apache.commons.lang3.RandomUtils
 import org.joda.time.DateTime
 import play.api.Configuration
-import play.api.mvc.Result
 import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.api.commands.UpdateWriteResult
 import reactivemongo.api.{Cursor, DefaultDB, MongoConnection}
@@ -113,8 +112,8 @@ object BsonPicklers {
 
 object AnnotationToolUser {
   implicit val bsonRw: BSONDocumentHandler[AnnotationToolUser] = Macros.handler[AnnotationToolUser]
-  import prickle._
   import BsonPicklers._
+  import prickle._
 
   implicit val pickler: Pickler[AnnotationToolUser] =
     prickle.Pickler.materializePickler[AnnotationToolUser]
@@ -304,6 +303,29 @@ object SentenceBSON {
 
 class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) extends StrictLogging {
 
+  private val coll = db.db.collection[BSONCollection]("sentences")
+
+  import SentenceBSON._
+
+  def recalcStatuses() = {
+    coll.find(BSONDocument()).cursor[Sentence]().fold(NotUsed) {
+      case (_, doc) =>
+        val newStatus = SentenceUtils.computeStatus(doc)
+        if (newStatus != doc.status) {
+          val search = BSONDocument(
+            "_id" -> doc.id
+          )
+          val upd = BSONDocument(
+            "$set" -> BSONDocument(
+              "status" -> newStatus.value
+            )
+          )
+          coll.update(search, upd)
+        }
+        NotUsed
+    }
+  }
+
   def findAlreadyReported(surfaceComment: String): Future[Option[String]] = {
     val q = BSONDocument(
       "tags" -> "report",
@@ -312,15 +334,11 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
 
     val proj = BSONDocument("_id" -> 1)
 
-    coll.find(q, proj).one.map {
+    coll.find(q, proj).one[BSONDocument].map {
       case Some(doc) => doc.getAs[String]("_id")
       case _         => None
     }
   }
-
-  private val coll = db.db.collection[BSONCollection]("sentences")
-
-  import SentenceBSON._
 
   def checkExistance(ids: Seq[String]): Future[Set[String]] = {
     if (ids.isEmpty) {
@@ -383,6 +401,10 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
       case "wr" =>
         doc.merge(
           "status" -> SentenceStatus.WorkRequired.value
+        )
+      case "rj" | "rej" =>
+        doc.merge(
+          "status" -> SentenceStatus.Rejected.value
         )
       case "bad" | "ng" =>
         doc.merge(
@@ -460,6 +482,13 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
           "$ne" -> user._id
         )
       )
+      if (req.query == "") {
+        q = q.merge(
+          "status" -> BSONDocument(
+            "$ne" -> SentenceStatus.Rejected.value
+          )
+        )
+      }
     }
 
     if (req.reviewedBefore.isDefined) {
@@ -659,6 +688,13 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
 }
 
 object SentenceUtils {
+
+  val badAnnotations = Set(
+    "どうでもいい",
+    "入力：意味不明",
+    "入力：誤字脱字"
+  )
+
   def cleanTags(blocks: Seq[SentenceBlock], allowedFields: Set[String]): Seq[SentenceBlock] = {
     blocks.map { b =>
       b.copy(spans = b.spans.map { s =>
@@ -689,6 +725,7 @@ object SentenceUtils {
     } else {
       val values = anns.map(_.value).distinct
       values match {
+        case vs if vs.exists(badAnnotations.contains)        => SentenceStatus.Rejected
         case Seq(XInt(_))                                    => SentenceStatus.TotalAgreement
         case vs if vs.forall(v => XInt.unapply(v).isDefined) => SentenceStatus.PartialAgreement
         case _                                               => SentenceStatus.WorkRequired

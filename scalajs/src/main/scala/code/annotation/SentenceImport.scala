@@ -26,8 +26,13 @@ object SentenceImport {
           }
           .runNow()
       }
-
     }
+
+    def recalcStatuses(): Callback =
+      scope.props.map { api =>
+        val req = SentenceRequest(SentenceRequest.Request.RecalcStatuses(0))
+        api.sentenceCall[Annotation](req)
+      }.void
 
     def close() = Callback {
       if (connection != null) {
@@ -76,7 +81,12 @@ object SentenceImport {
           "Import"
         ),
         <.h2("Messages"),
-        renderMessages(s.messages)
+        renderMessages(s.messages),
+        <.h2("Controls"),
+        <.button(
+          ^.onClick --> recalcStatuses(),
+          "Recompute Statuses"
+        )
       )
     }
 

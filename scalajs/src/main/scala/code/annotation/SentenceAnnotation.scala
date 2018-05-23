@@ -666,7 +666,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
             }
           ),
           <.button(
-            "Reject",
+            "No Candidate",
             ^.onClick --> cback(CommentEdit("Reject", state.comment, state.focus))
           )
         )
