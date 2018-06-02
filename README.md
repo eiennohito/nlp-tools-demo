@@ -24,10 +24,10 @@ It's scope is `akane.jumanpp` and it has subitems:
 
 ## From a package
 
-1. Download a package from [Releases]().
+1. Download a package from [Releases](https://github.com/eiennohito/nlp-tools-demo/releases/).
 1. Install Juman++ V2 package version, you will need a model.
 1. Install a MongoDB
-1. Compile jumanpp-grpc.
+1. Clone and compile [jumanpp-grpc](https://github.com/eiennohito/jumanpp-grpc).
 1. Edit `conf/application.conf`, you will need to add at least the following entries:
 ```
 # URL of a mongo instance
