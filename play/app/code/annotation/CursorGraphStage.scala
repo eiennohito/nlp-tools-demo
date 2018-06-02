@@ -5,13 +5,13 @@ import akka.stream.scaladsl.Source
 import akka.stream.{Attributes, Outlet, SourceShape}
 import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler}
 import com.typesafe.scalalogging.StrictLogging
-import reactivemongo.api.{Cursor, CursorProducer, ReadPreference, SerializationPack}
+import reactivemongo.api._
 import reactivemongo.api.collections.GenericQueryBuilder
 
 import scala.concurrent.{Future, Promise}
 
-class CursorGraphStage[T, P <: SerializationPack, R <: P#Reader[T]](
-    bldr: GenericQueryBuilder[P]#Self,
+class CursorGraphStage[T, P <: SerializationPack, BP <: GenericQueryBuilder[P], R <: P#Reader[T]](
+    bldr: BP,
     rpref: ReadPreference,
     maxDocs: Int
 )(implicit rdr: R, cp: CursorProducer[T])
@@ -57,7 +57,6 @@ class CursorGraphStage[T, P <: SerializationPack, R <: P#Reader[T]](
       }
 
       private def handleData(data: Iterator[T]): Future[Cursor.State[GraphStageLogic]] = {
-        logger.debug("new data")
         promise = Promise() //write from ReactiveMongo thread
         callback.invoke(CursorGraphStage.Data(data))
         promise.future
@@ -70,7 +69,7 @@ class CursorGraphStage[T, P <: SerializationPack, R <: P#Reader[T]](
         cursor
           .foldBulksM[GraphStageLogic](logic, maxDocs)(
             (_, data) => handleData(data),
-            Cursor.DoneOnError[GraphStageLogic]((_, err) => failStage(err))
+            Cursor.DoneOnError[GraphStageLogic]((_, err) => callback.invoke(CursorGraphStage.Fail(err)))
           )(logic.materializer.executionContext)
           .onComplete {
             case scala.util.Success(l) =>
@@ -81,7 +80,6 @@ class CursorGraphStage[T, P <: SerializationPack, R <: P#Reader[T]](
       }
 
       override def postStop(): Unit = {
-        logger.debug("stopped")
         if (promise != null) promise.trySuccess(Cursor.Done(logic))
       }
     }
@@ -95,12 +93,12 @@ object CursorGraphStage {
 }
 
 object MongoStream {
-  implicit class QueryBuilderOps[P <: SerializationPack](val bldr: GenericQueryBuilder[P]#Self) {
+  implicit class QueryBuilderOps[QB <: GenericQueryBuilder[BSONSerializationPack.type]](val bldr: QB) {
     type Rdr[T] = bldr.pack.Reader[T]
     def stream[T](maxDocs: Int = -1, pref: ReadPreference = bldr.readPreference)(
         implicit rdr: Rdr[T],
         cp: CursorProducer[T]): Source[T, NotUsed] = {
-      val stage = new CursorGraphStage[T, P, Rdr[T]](bldr, pref, maxDocs)(rdr, cp)
+      val stage = new CursorGraphStage[T, bldr.pack.type, QB, Rdr[T]](bldr, pref, maxDocs)(rdr, cp)
       Source.fromGraph(stage)
     }
   }
