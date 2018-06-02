@@ -1,10 +1,12 @@
 Demos for Kurohashi-Kawahara lab
 ==================================================
 
-Right now, the only available one is [Juman++](http://nlp.ist.i.kyoto-u.ac.jp/EN/index.php?JUMAN%2B%2B).
+Right now, they are [Juman++](http://nlp.ist.i.kyoto-u.ac.jp/EN/index.php?JUMAN%2B%2B).
 You can see the demo in action [on this page](http://tulip.kuee.kyoto-u.ac.jp/demo/jumanpp_lattice?text=%E5%A4%96%E5%9B%BD%E4%BA%BA%E5%8F%82%E6%94%BF%E6%A8%A9%E3%81%AB%E5%AF%BE%E3%81%99%E3%82%8B%E8%80%83%E3%81%88%E6%96%B9%E3%81%AE%E9%81%95%E3%81%84%E3%80%82).
 
-## From a package
+Another thing here is Juman++ Partial Annotation tool, but it will probably move to its own repository later.
+
+## Running a 
 
 1. Download a package from [Releases](https://github.com/eiennohito/nlp-tools-demo/releases/).
 1. Install Juman++ V2 package version, you will need a model.
@@ -31,6 +33,7 @@ akane.jumanpp.grpc {
 ```
 
 The instance will be available at http://localhost:9000. You can change the port with `http.port`.
+The annotation tool url will be http://localhost:9000/atool. A user with a login token 000000 will be created by default.
 
 ## From Source
 
