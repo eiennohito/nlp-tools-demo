@@ -114,6 +114,7 @@ lazy val `grpc-streaming` = project in file("grpc-akka-stream")
 
 fork in run := true
 
-inThisBuild(
-  scalaVersion := "2.12.4"
-)
+inThisBuild(Seq(
+  scalaVersion := "2.12.4",
+  version := "0.1"
+))

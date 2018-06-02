@@ -6,7 +6,7 @@ You can see the demo in action [on this page](http://tulip.kuee.kyoto-u.ac.jp/de
 
 ## Compiling
 
-This is a [Play](https://www.playframework.com/) 2.5 / [Scala.js](https://www.scala-js.org/) application.
+This is a [Play](https://www.playframework.com/) 2.6 / [Scala.js](https://www.scala-js.org/) application.
 You need to have [sbt](http://www.scala-sbt.org/) installed.
 After cloning, `cd` into the directory and run `sbt` there.
 
@@ -21,3 +21,31 @@ It's scope is `akane.jumanpp` and it has subitems:
 * `resources`: path to jumanpp resources (model). Empty by default.
 * `lattice`: size of output lattice. Defaults to 1: only best variant.
 * `args`: other arguments as a list `[]`
+
+## From a package
+
+1. Download a package from [Releases]().
+1. Install Juman++ V2 package version, you will need a model.
+1. Install a MongoDB
+1. Compile jumanpp-grpc.
+1. Edit `conf/application.conf`, you will need to add at least the following entries:
+```
+# URL of a mongo instance
+mongo.uri = "mongodb://localhost:27017"
+
+# Database names for jumanpp lattice demo (broken atm) and annotation tool
+mongo.database = "jumanpp_demo" # 
+annotations.db = "anndemo"
+
+# Path to Juman++ regular executable
+akane.jumanpp.executable = "/usr/local/bin/jumanpp"
+
+akane.jumanpp.grpc {
+  # Path to Juman++ GRPC executable
+  executable = "/home/user/dev/jumanpp-grpc/src/jumandic/jumanpp-jumandic-grpc"
+  # Configuration file for the Juman++ analysis model
+  config = "/usr/local/share/jumanpp/jumandic.conf"
+}
+```
+
+The instance will be available at http://localhost:9000. You can change the port with `http.port`.
