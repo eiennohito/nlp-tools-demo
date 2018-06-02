@@ -6,7 +6,7 @@ You can see the demo in action [on this page](http://tulip.kuee.kyoto-u.ac.jp/de
 
 Another thing here is Juman++ Partial Annotation tool, but it will probably move to its own repository later.
 
-## Running a 
+## Running an Annotation tool from a package
 
 1. Download a package from [Releases](https://github.com/eiennohito/nlp-tools-demo/releases/).
 1. Install Juman++ V2 package version, you will need a model.
