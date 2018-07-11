@@ -23,8 +23,8 @@ object CountAnnotations {
 
   private val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm")
 
-
-  implicit val ldtOrdering: Ordering[LocalDateTime] = (x: LocalDateTime, y: LocalDateTime) => x.compareTo(y)
+  implicit val ldtOrdering: Ordering[LocalDateTime] = (x: LocalDateTime, y: LocalDateTime) =>
+    x.compareTo(y)
 
   def main(args: Array[String]): Unit = {
     import scala.concurrent.duration._
@@ -40,7 +40,6 @@ object CountAnnotations {
       "5b065f792300003368f7be92"
     )
 
-
     val q = BSONDocument(
       "blocks.annotations.annotatorId" -> BSONDocument(
         "$in" -> BSONArray(
@@ -52,7 +51,9 @@ object CountAnnotations {
     import code.annotation.SentenceBSON._
 
     val find = coll.find(q)
-    val sents = Await.result(find.cursor[Sentence]().collect[Vector](-1, Cursor.FailOnError[Vector[Sentence]]()), 1.minute)
+    val sents = Await.result(
+      find.cursor[Sentence]().collect[Vector](-1, Cursor.FailOnError[Vector[Sentence]]()),
+      1.minute)
 
     val perTime = new mutable.HashMap[String, Map[String, Int]]()
     val confusion = new mutable.HashMap[(String, String), Int]()
@@ -60,17 +61,23 @@ object CountAnnotations {
     val durs = annotators.map(a => a -> new ArrayBuffer[Float]()).toMap
 
     for (s <- sents) {
-      val data = s.blocks.flatMap { b => b.annotations.filter(a => annotators.contains(a.annotatorId.id)).map(a => a.annotatorId.id -> localDate(a.timestamp.get) )}
-      data.groupBy(_._1).map { case (a, b) => a -> b.maxBy(_._2)._2 }.foreach { case (uid, date) =>
-        val minute = date.getMinute
-        val newMinute = (minute / 10) * 10
-        val key = formatter.format(date.withMinute(newMinute))
-        val map = perTime.getOrElseUpdate(key, Map.empty)
-        perTime.put(key, map.updated(uid, map.getOrElse(uid, 0) + 1))
+      val data = s.blocks.flatMap { b =>
+        b.annotations
+          .filter(a => annotators.contains(a.annotatorId.id))
+          .map(a => a.annotatorId.id -> localDate(a.timestamp.get))
+      }
+      data.groupBy(_._1).map { case (a, b) => a -> b.maxBy(_._2)._2 }.foreach {
+        case (uid, date) =>
+          val minute = date.getMinute
+          val newMinute = (minute / 10) * 10
+          val key = formatter.format(date.withMinute(newMinute))
+          val map = perTime.getOrElseUpdate(key, Map.empty)
+          perTime.put(key, map.updated(uid, map.getOrElse(uid, 0) + 1))
       }
 
       for (b <- s.blocks) {
-        val anns = b.annotations.filter(a => annotators.contains(a.annotatorId.id)).sortBy(_.annotatorId.id)
+        val anns =
+          b.annotations.filter(a => annotators.contains(a.annotatorId.id)).sortBy(_.annotatorId.id)
         anns match {
           case Seq(x, y) =>
             val key = (x.value, y.value)
@@ -82,8 +89,12 @@ object CountAnnotations {
         }
       }
 
-      val durData = s.blocks.flatMap { b => b.annotations.filter(a => annotators.contains(a.annotatorId.id)).map(a => a.annotatorId.id -> a.duration )}
-      durData.groupBy(_._1).map { case (a,b) => a -> b.maxBy(_._2)._2 }
+      val durData = s.blocks.flatMap { b =>
+        b.annotations
+          .filter(a => annotators.contains(a.annotatorId.id))
+          .map(a => a.annotatorId.id -> a.duration)
+      }
+      durData.groupBy(_._1).map { case (a, b) => a -> b.maxBy(_._2)._2 }
       for ((k, v) <- durData) {
         durs(k) += v
       }
@@ -95,11 +106,14 @@ object CountAnnotations {
 
     for (d <- dates) {
       val vals = perTime.getOrElse(d, Map.empty)
-      val cnts = annotators.map { a => vals.getOrElse(a, 0) }
+      val cnts = annotators.map { a =>
+        vals.getOrElse(a, 0)
+      }
       println(cnts.mkString(s"$d ", ", ", ""))
     }
 
-    val cnts = perTime.foldLeft(Map.empty[String, Int]) { case (m1, m2) =>
+    val cnts = perTime.foldLeft(Map.empty[String, Int]) {
+      case (m1, m2) =>
         val x2 = m2._2
         x2.foldLeft(m1) { case (m, (k, v)) => m.updated(k, v + m.getOrElse(k, 0)) }
     }

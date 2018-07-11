@@ -2,10 +2,10 @@ package code.annotation
 
 import akka.NotUsed
 import akka.stream.scaladsl.Source
+import code.AllowedFields
 import com.google.inject.Provides
 import com.google.protobuf.timestamp.Timestamp
 import com.typesafe.scalalogging.StrictLogging
-import controllers.AllowedFields
 import javax.inject.{Inject, Singleton}
 import net.codingwell.scalaguice.ScalaModule
 import org.apache.commons.lang3.RandomUtils
@@ -301,7 +301,11 @@ object SentenceBSON {
     Macros.handler[BadStatusComment]
 }
 
-class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) extends StrictLogging {
+class SentenceDbo @Inject()(
+    db: AnnotationDb,
+    allowedFields: AllowedFields
+)(implicit ec: ExecutionContext)
+    extends StrictLogging {
 
   private val coll = db.db.collection[BSONCollection]("sentences")
 
@@ -645,7 +649,7 @@ class SentenceDbo @Inject()(db: AnnotationDb)(implicit ec: ExecutionContext) ext
       val merged = MergeSentence.merge(s, req.edits.get, ObjId(uid.stringify), req.duration)
 
       val updated = merged.copy(
-        blocks = SentenceUtils.cleanTags(merged.blocks, AllowedFields.allowedFields),
+        blocks = SentenceUtils.cleanTags(merged.blocks, allowedFields.allowedFields),
         numAnnotations = SentenceUtils.numAnnotations(merged),
         status = SentenceUtils.computeStatus(merged)
       )

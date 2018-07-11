@@ -2,6 +2,7 @@ package controllers
 
 import java.util.Locale
 
+import code.AllowedFields
 import code.grpc.LatticeDumpJppGrpcAnalyzer
 import code.transport.lattice._
 import com.ibm.icu.text.BreakIterator
@@ -14,20 +15,9 @@ import ws.kotonoha.akane.analyzers.jumanpp.wire.lattice.{FieldValue, LatticeDump
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.{ExecutionContext, Future}
 
-object AllowedFields {
-  //TODO: fix with something better
-  val allowedFields = Set(
-    "surface",
-    "baseform",
-    "pos",
-    "subpos",
-    "conjform",
-    "conjtype"
-  )
-}
-
 class JumanppGrpcService @Inject()(
-    ana: Provider[LatticeDumpJppGrpcAnalyzer]
+    ana: Provider[LatticeDumpJppGrpcAnalyzer],
+    allowedFields: AllowedFields
 )(implicit ec: ExecutionContext) {
 
   private def makeRequestImpl(sentence: EditableSentence): AnalysisRequest = {
@@ -35,7 +25,7 @@ class JumanppGrpcService @Inject()(
     for (line <- sentence.parts) {
       if (line.node) {
         sb.append('\t').append(line.surface)
-        for (tag <- line.tags.filter(t => AllowedFields.allowedFields.contains(t.key))) {
+        for (tag <- line.tags.filter(t => allowedFields.isAllowed(t.key))) {
           sb.append('\t').append(tag.key).append(':').append(tag.value)
         }
       } else {

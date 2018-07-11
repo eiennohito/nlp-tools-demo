@@ -4,7 +4,7 @@ import java.io.Closeable
 import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicReference
 
-import akka.stream.{ActorMaterializer, Materializer}
+import akka.stream.Materializer
 import akka.stream.scaladsl.{Flow, Sink, Source}
 import com.google.inject.Provides
 import com.typesafe.config.Config
@@ -13,13 +13,10 @@ import javax.inject.{Inject, Provider, Singleton}
 import net.codingwell.scalaguice.ScalaModule
 import play.api.inject.ApplicationLifecycle
 import ws.kotonoha.akane.analyzers.AsyncAnalyzer
-import ws.kotonoha.akane.analyzers.jumanpp.grpc.{
-  AnalysisRequest,
-  JumanppGrpcConfig,
-  JumanppGrpcProcess
-}
+import ws.kotonoha.akane.analyzers.jumanpp.grpc.{AnalysisRequest, JumanppGrpcConfig, JumanppGrpcProcess}
 import ws.kotonoha.akane.analyzers.jumanpp.wire.lattice.LatticeDump
 
+import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
 trait LatticeDumpJppGrpcAnalyzer extends AsyncAnalyzer[AnalysisRequest, LatticeDump]
@@ -36,11 +33,16 @@ class LatticeDumpJppModule extends ScalaModule {
     val binary = cfg.strOr("akane.jumanpp.grpc.executable", "jumanpp-jumandic-grpc")
     val config = cfg.getString("akane.jumanpp.grpc.config")
     val nthreads = cfg.intOr("akane.jumanpp.grpc.threads", 1)
+    var otherArgs = Seq.empty[String]
+    if (cfg.hasPath("akane.jumanpp.grpc.args")) {
+      otherArgs = cfg.getStringList("akane.jumanpp.grpc.args").asScala
+    }
 
     JumanppGrpcConfig(
       executable = Paths.get(binary),
       config = Paths.get(config),
-      numThreads = nthreads
+      numThreads = nthreads,
+      flags = otherArgs
     )
   }
 }

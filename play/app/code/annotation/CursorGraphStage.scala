@@ -69,7 +69,8 @@ class CursorGraphStage[T, P <: SerializationPack, BP <: GenericQueryBuilder[P], 
         cursor
           .foldBulksM[GraphStageLogic](logic, maxDocs)(
             (_, data) => handleData(data),
-            Cursor.DoneOnError[GraphStageLogic]((_, err) => callback.invoke(CursorGraphStage.Fail(err)))
+            Cursor.DoneOnError[GraphStageLogic]((_, err) =>
+              callback.invoke(CursorGraphStage.Fail(err)))
           )(logic.materializer.executionContext)
           .onComplete {
             case scala.util.Success(l) =>
@@ -93,7 +94,8 @@ object CursorGraphStage {
 }
 
 object MongoStream {
-  implicit class QueryBuilderOps[QB <: GenericQueryBuilder[BSONSerializationPack.type]](val bldr: QB) {
+  implicit class QueryBuilderOps[QB <: GenericQueryBuilder[BSONSerializationPack.type]](
+      val bldr: QB) {
     type Rdr[T] = bldr.pack.Reader[T]
     def stream[T](maxDocs: Int = -1, pref: ReadPreference = bldr.readPreference)(
         implicit rdr: Rdr[T],

@@ -3,6 +3,7 @@ package controllers
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
+import code.AllowedFields
 import code.annotation._
 import code.transport.lattice.{
   CandidateNode,
@@ -93,7 +94,7 @@ class SentenceApiController @Inject()(
   }
 }
 
-class BlockSeqBuilder {
+class BlockSeqBuilder(allowedFields: AllowedFields) {
   private var blockStart = 0
   private var blockEnd = 0
   private var nodeStart = 0
@@ -131,7 +132,7 @@ class BlockSeqBuilder {
           surface = x.surface,
           unit = x.tags.nonEmpty,
           tags = x.tags
-            .filter(t => AllowedFields.allowedFields.contains(t.key))
+            .filter(t => allowedFields.isAllowed(t.key) && t.value != x.surface)
             .map(t => t.key -> t.value)
             .toMap
         )
@@ -179,7 +180,7 @@ class BlockSeqBuilder {
         surface = x.surface,
         unit = x.tags.nonEmpty,
         tags = x.tags
-          .filter(t => AllowedFields.allowedFields.contains(t.key))
+          .filter(t => allowedFields.isAllowed(t.key) && t.value != x.surface)
           .map(t => t.key -> t.value)
           .toMap
       )
@@ -295,13 +296,14 @@ class BlockSeqBuilder {
 
 class SentenceReportService @Inject()(
     dbo: SentenceDbo,
-    jumanpp: JumanppGrpcService
+    jumanpp: JumanppGrpcService,
+    allowedFields: AllowedFields
 )(implicit ec: ExecutionContext)
     extends StrictLogging {
 
   def handleMerge(dump: LatticeDump, sent: EditableSentence, reporter: String): Future[String] = {
     val top1 = LatticeUtil.top1(dump)
-    val bsb = new BlockSeqBuilder
+    val bsb = new BlockSeqBuilder(allowedFields)
     bsb.make(top1, sent.parts)
     val blocks = bsb.result()
     val hasUnit = blocks.exists { sb =>

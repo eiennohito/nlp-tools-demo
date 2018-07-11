@@ -14,5 +14,6 @@ class MainModule extends Module {
     binder.install(new MongoModule)
     binder.install(new AnnotationDbModule)
     binder.install(new LatticeDumpJppModule)
+    binder.install(new AllowedFieldsModule)
   }
 }
