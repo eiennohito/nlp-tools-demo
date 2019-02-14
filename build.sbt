@@ -9,7 +9,7 @@ lazy val playserver = (project in file("play")).settings(
     "com.vmunier" %% "scalajs-scripts" % "1.1.1",
     "org.webjars" %% "webjars-play" % "2.6.3",
     "org.webjars" % "bootstrap" % "3.1.1-2",
-    "org.reactivemongo" %% "reactivemongo" % "0.13.0",
+    "org.reactivemongo" %% "reactivemongo" % "0.16.2",
     "net.codingwell" %% "scala-guice" % "4.1.1",
     "com.ibm.icu" % "icu4j" % "61.1",
     guice
@@ -59,7 +59,8 @@ lazy val scalajsclient = (project in file("scalajs")).settings(
       minified  "umd/react-dom-server.browser.production.min.js"
       dependsOn "umd/react-dom.development.js"
       commonJSName "ReactDOMServer"
-  )
+  ),
+  dependencyOverrides += "org.webjars.npm" % "js-tokens" % "3.0.2"
 ).enablePlugins(ScalaJSPlugin, ScalaJSWeb).
   dependsOn(shared2Js)
 
@@ -84,7 +85,7 @@ lazy val shared = crossProject(JSPlatform, JVMPlatform)
       "com.github.benhutchison" %%% "prickle" % "1.1.13",
       "com.thesamet.scalapb" %%% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion,
       "com.thesamet.scalapb" %%% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
-      "org.reactivemongo" %% "reactivemongo-bson-macros" % "0.13.0" % Provided intransitive(),
+      "org.reactivemongo" %% "reactivemongo-bson-macros" % "0.16.2" % Provided intransitive(),
       "io.grpc" % "grpc-netty" % "1.10.0",
     ),
     PB.targets in Compile := Seq(

@@ -3,9 +3,9 @@ resolvers += "Typesafe repository" at "https://repo.typesafe.com/typesafe/releas
 libraryDependencies += "com.github.os72" % "protoc-jar" % "3.5.0"
 
 // The Play plugin
-addSbtPlugin("com.typesafe.play" % "sbt-plugin" % "2.6.10")
+addSbtPlugin("com.typesafe.play" % "sbt-plugin" % "2.6.21")
 
-addSbtPlugin("com.typesafe.sbt" % "sbt-native-packager" % "1.3.2")
+addSbtPlugin("com.typesafe.sbt" % "sbt-native-packager" % "1.3.18")
 
 // web plugins
 
@@ -19,12 +19,11 @@ addSbtPlugin("com.typesafe.sbt" % "sbt-less" % "1.1.2")
 
 //addSbtPlugin("com.typesafe.sbt" % "sbt-mocha" % "1.0.0")
 
-addSbtPlugin("org.scala-js" % "sbt-scalajs" % "0.6.22")
+addSbtPlugin("com.vmunier" % "sbt-web-scalajs" % "1.0.8-0.6")
 
-addSbtPlugin("com.vmunier" % "sbt-web-scalajs" % "1.0.6")
-
-addSbtPlugin("org.portable-scala" % "sbt-crossproject"         % "0.3.1")
-addSbtPlugin("org.portable-scala" % "sbt-scalajs-crossproject" % "0.3.1")
+//addSbtPlugin("org.portable-scala" % "sbt-crossproject"         % "0.3.1")
+addSbtPlugin("org.portable-scala" % "sbt-scalajs-crossproject" % "0.6.0")
+addSbtPlugin("org.scala-js" % "sbt-scalajs" % "0.6.26")
 
 val scalaPbVersion = "0.7.0"
 libraryDependencies += "com.thesamet.scalapb" %% "compilerplugin-shaded" % scalaPbVersion

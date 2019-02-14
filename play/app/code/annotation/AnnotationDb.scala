@@ -338,7 +338,7 @@ class SentenceDbo @Inject()(
 
     val proj = BSONDocument("_id" -> 1)
 
-    coll.find(q, proj).one[BSONDocument].map {
+    coll.find(q, Some(proj)).one[BSONDocument].map {
       case Some(doc) => doc.getAs[String]("_id")
       case _         => None
     }
@@ -358,14 +358,14 @@ class SentenceDbo @Inject()(
       "_id" -> 1
     )
     coll
-      .find(q, vals)
+      .find(q, Some(vals))
       .cursor[BSONDocument]()
       .collect[Set](ids.size, Cursor.FailOnError[Set[BSONDocument]]())
       .map(_.map(_.getAs[String]("_id").get))
   }
 
   def saveSentences(data: Seq[Sentence]): Future[Int] = {
-    coll.insert[Sentence](ordered = false).many(data).map(_.totalN)
+    coll.insert(ordered = false).many(data).map(_.totalN)
   }
 
   private def convertCommonStatus(
