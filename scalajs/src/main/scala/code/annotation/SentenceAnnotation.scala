@@ -6,6 +6,7 @@ import japgolly.scalajs.react._
 import japgolly.scalajs.react.extra.StateSnapshot
 import japgolly.scalajs.react.vdom.html_<^._
 
+import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
@@ -428,50 +429,6 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
       p.annotate(req)
     }
 
-    def renderSpan(s1: TokenSpan, annotation: Annotation, key: String) = {
-      val showCounts = scope.props.runNow().showCounts
-      val annValue = s1.index.toString
-      val count = scope.props.runNow().block.annotations.count(_.value == annValue)
-      <.div(
-        ^.cls := s"opt-block opt-span block-$key ann-selection",
-        ^.key := key,
-        ^.classSet(
-          "opt-selected" -> (annValue == annotation.value)
-        ),
-        s1.tokens.map { t =>
-          <.div(
-            ^.cls := "token",
-            <.span(
-              ^.cls := "token-data surface",
-              t.surface,
-              <.span(
-                ^.cls := "token-ann-cnt",
-                count
-              ).when(showCounts && count != 0)
-            ),
-            t.tags.toSeq
-              .sortBy(_._1)
-              .map { tag =>
-                <.span(
-                  ^.cls := "token-data tag",
-                  <.span(
-                    ^.cls := "key",
-                    tag._1,
-                    ":"
-                  ),
-                  <.span(
-                    ^.cls := "value",
-                    tag._2
-                  )
-                )
-              }
-              .toTagMod
-          )
-        }.toTagMod,
-        ^.onClick --> annotateAs(annotation, annValue)
-      )
-    }
-
     private def renderEditBtn(annotation: Annotation) = {
       val showCounts = scope.props.runNow().showCounts
       val count = scope.props.runNow().block.annotations.count(_.value == "両方間違い")
@@ -534,9 +491,109 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
       )
     }
 
+    final case class DisplayTag(
+        key: String,
+      value: String,
+      same: Boolean
+    )
+
+    final case class DisplayToken(token: ExampleToken, otags: Map[String, String], lenEq: Boolean) {
+      def surface = token.surface
+
+      val tags = token.tags.map { case (key, value) =>
+        val sameTag = otags.get(key) match {
+          case Some(`value`) => lenEq
+          case _ => false
+        }
+        DisplayTag(key, value, sameTag)
+      }.toSeq.sortBy(_.key)
+    }
+
+    final case class DisplaySpan(target: TokenSpan, other: TokenSpan, curAnn: Annotation) {
+      def numAnnotations(block: SentenceBlock) = {
+        block.annotations.count(_.value == newAnn)
+      }
+
+      def matchingTokens: Option[Seq[DisplayToken]] = {
+        if (target.tokens.length != other.tokens.length) {
+          return None
+        }
+        var i = 0
+        val maxI = target.tokens.length
+
+        val result = new ArrayBuffer[DisplayToken](maxI)
+
+        while (i < maxI) {
+          val t1 = target.tokens(i)
+          val t2 = other.tokens(i)
+          if (t1.surface != t2.surface) {
+            return None
+          }
+          result += DisplayToken(t1, t2.tags, lenEq = true)
+          i += 1
+        }
+
+        Some(result)
+      }
+
+      def tokens: Seq[DisplayToken] = {
+        matchingTokens.getOrElse {
+          target.tokens.map { token =>
+            DisplayToken(token, Map.empty, lenEq = false)
+          }
+        }
+      }
+
+      val newAnn = target.index.toString
+
+      def selected = newAnn == curAnn.value
+    }
+
+    def renderSpan(span: DisplaySpan, key: String) = {
+      val showCounts = scope.props.runNow().showCounts
+      val count = span.numAnnotations(scope.props.runNow().block)
+      <.div(
+        ^.cls := s"opt-block opt-span block-$key ann-selection",
+        ^.key := key,
+        ^.classSet(
+          "opt-selected" -> span.selected
+        ),
+        span.tokens.map { t =>
+          <.div(
+            ^.cls := "token",
+            <.span(
+              ^.cls := "token-data surface",
+              t.surface,
+              <.span(
+                ^.cls := "token-ann-cnt",
+                count
+              ).when(showCounts && count != 0)
+            ),
+            t.tags.map { tag =>
+                <.span(
+                  ^.cls := "token-data tag",
+                  ^.classSet("tag-same" -> tag.same),
+                  <.span(
+                    ^.cls := "key",
+                    tag.key,
+                    ":"
+                  ),
+                  <.span(
+                    ^.cls := "value",
+                    tag.value
+                  )
+                )
+              }
+              .toTagMod
+          )
+        }.toTagMod,
+        ^.onClick --> annotateAs(span.curAnn, span.newAnn)
+      )
+    }
+
     def renderCmpBody(s1: TokenSpan, s2: TokenSpan, annotation: Annotation): TagMod = {
-      val s1Dom = renderSpan(s1, annotation, "s1")
-      val s2Dom = renderSpan(s2, annotation, "s2")
+      val s1Dom = renderSpan(DisplaySpan(s1, s2, annotation), "s1")
+      val s2Dom = renderSpan(DisplaySpan(s2, s1, annotation), "s2")
       val otherOptions = renderOther(annotation)
       <.div(
         ^.cls := "ann-options block-diff",
