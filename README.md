@@ -6,6 +6,10 @@ You can see the demo in action [on this page](http://tulip.kuee.kyoto-u.ac.jp/de
 
 Another thing here is Juman++ Partial Annotation tool, but it will probably move to its own repository later.
 
+## Screencast
+
+To see the tool in action, please see the screencast: https://youtu.be/2tzW2n--axM
+
 ## Running an Annotation tool from a package
 
 1. Download a package from [Releases](https://github.com/eiennohito/nlp-tools-demo/releases/).
