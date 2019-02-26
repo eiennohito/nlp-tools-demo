@@ -23,16 +23,21 @@ import scala.concurrent.{ExecutionContext, Future}
 class SentenceApiController @Inject()(
     dbo: SentenceDbo,
     objLog: LogDbo,
-    reportSvc: SentenceReportService
+    reportSvc: SentenceReportService,
+    jpp: JumanppGrpcService
 )(implicit ec: ExecutionContext)
-    extends InjectedController {
+    extends InjectedController
+    with StrictLogging {
 
   def doHandle(body: SentenceRequest, user: AnnotationToolUser): Future[Result] = {
     objLog.log(body, user)
 
     body.request match {
       case SentenceRequest.Request.Sentences(sents) =>
-        dbo.getSentences(user, sents).map(sents => Ok(LiftPB(sents)))
+        dbo
+          .getSentences(user, sents)
+          .flatMap(sents => jpp.checkTokens(sents))
+          .map(sents => Ok(LiftPB(sents)))
       case SentenceRequest.Request.Annotate(obj) =>
         val uid = if (user.admin) {
           BSONObjectID.parse(obj.annotatorId.id).getOrElse(user._id)
@@ -48,6 +53,7 @@ class SentenceApiController @Inject()(
           dbo.mergeEdits(uid, req).map(x => Ok(LiftPB(x)))
         }
       case SentenceRequest.Request.Review(req) =>
+        logger.debug(req.toString)
         val uid = if (user.admin) {
           BSONObjectID.parse(req.annotatorId.id).getOrElse(user._id)
         } else user._id

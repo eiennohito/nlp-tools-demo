@@ -13,13 +13,19 @@ import javax.inject.{Inject, Provider, Singleton}
 import net.codingwell.scalaguice.ScalaModule
 import play.api.inject.ApplicationLifecycle
 import ws.kotonoha.akane.analyzers.AsyncAnalyzer
-import ws.kotonoha.akane.analyzers.jumanpp.grpc.{AnalysisRequest, JumanppGrpcConfig, JumanppGrpcProcess}
+import ws.kotonoha.akane.analyzers.jumanpp.grpc.{
+  AnalysisRequest,
+  JumanppGrpcConfig,
+  JumanppGrpcProcess
+}
 import ws.kotonoha.akane.analyzers.jumanpp.wire.lattice.LatticeDump
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
-trait LatticeDumpJppGrpcAnalyzer extends AsyncAnalyzer[AnalysisRequest, LatticeDump]
+trait LatticeDumpJppGrpcAnalyzer extends AsyncAnalyzer[AnalysisRequest, LatticeDump] {
+  def stream[T](in: Source[AnalysisRequest, T]): Source[LatticeDump, T]
+}
 
 class LatticeDumpJppModule extends ScalaModule {
   override def configure(): Unit = {
@@ -53,6 +59,9 @@ class LatticeDumpJppGrpcAnalyzerImpl(call: Flow[AnalysisRequest, LatticeDump, _]
   override def analyze(input: AnalysisRequest)(
       implicit ec: ExecutionContext): Future[LatticeDump] = {
     Source.single(input).via(call).runWith(Sink.head)
+  }
+  override def stream[T](in: Source[AnalysisRequest, T]): Source[LatticeDump, T] = {
+    in.via(call)
   }
 }
 

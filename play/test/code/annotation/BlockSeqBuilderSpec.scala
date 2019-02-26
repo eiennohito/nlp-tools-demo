@@ -12,7 +12,7 @@ class BlockSeqBuilderSpec extends FreeSpec with Matchers {
 
   "BlockSeqBuilder" - {
     "merges stuff correctly" in {
-      val bsb = new BlockSeqBuilder
+      val bsb = new BlockSeqBuilder(???)
       val top1 = Seq(
         CandidateNode(
           surface = "what",
@@ -52,7 +52,7 @@ class BlockSeqBuilderSpec extends FreeSpec with Matchers {
     }
 
     "merges overlapping stuff correctly" in {
-      val bsb = new BlockSeqBuilder
+      val bsb = new BlockSeqBuilder(???)
       val top1 = Seq(
         CandidateNode(
           surface = "wha",

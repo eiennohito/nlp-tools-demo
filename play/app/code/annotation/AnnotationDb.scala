@@ -9,27 +9,14 @@ import com.typesafe.scalalogging.StrictLogging
 import javax.inject.{Inject, Singleton}
 import net.codingwell.scalaguice.ScalaModule
 import org.apache.commons.lang3.RandomUtils
+import org.eiennohito.bson.Macros2
 import org.joda.time.DateTime
 import play.api.Configuration
 import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.api.commands.UpdateWriteResult
 import reactivemongo.api.{Cursor, DefaultDB, MongoConnection}
 import reactivemongo.bson.Macros.Annotations.Key
-import reactivemongo.bson.{
-  BSON,
-  BSONArray,
-  BSONDateTime,
-  BSONDocument,
-  BSONDocumentHandler,
-  BSONDouble,
-  BSONElement,
-  BSONHandler,
-  BSONInteger,
-  BSONObjectID,
-  BSONRegex,
-  BSONValue,
-  Macros
-}
+import reactivemongo.bson.{BSON, BSONArray, BSONDateTime, BSONDocument, BSONDocumentHandler, BSONDouble, BSONElement, BSONHandler, BSONInteger, BSONObjectID, BSONRegex, BSONValue, Macros}
 import scalapb.{GeneratedEnum, GeneratedEnumCompanion}
 import ws.kotonoha.akane.utils.XInt
 
@@ -280,16 +267,16 @@ object SentenceBSON {
       override def write(t: Float): BSONDouble = BSONDouble(t.toDouble)
     }
 
-  implicit val exampleTokenFormat: BSONDocumentHandler[ExampleToken] = Macros.handler[ExampleToken]
-  implicit val annotationFormat: BSONDocumentHandler[Annotation] = Macros.handler[Annotation]
-  implicit val tokenSpanFormat: BSONDocumentHandler[TokenSpan] = Macros.handler[TokenSpan]
-  implicit val blockFormat: BSONDocumentHandler[SentenceBlock] = Macros.handler[SentenceBlock]
+  implicit val exampleTokenFormat: BSONDocumentHandler[ExampleToken] = Macros2.handler[ExampleToken]
+  implicit val annotationFormat: BSONDocumentHandler[Annotation] = Macros2.handler[Annotation]
+  implicit val tokenSpanFormat: BSONDocumentHandler[TokenSpan] = Macros2.handler[TokenSpan]
+  implicit val blockFormat: BSONDocumentHandler[SentenceBlock] = Macros2.handler[SentenceBlock]
   implicit val statusFormat: BSONHandler[BSONInteger, SentenceStatus] = enumFormat[SentenceStatus]
-  implicit val reviewFormat: BSONDocumentHandler[Review] = Macros.handler[Review]
-  implicit val sentenceFormat: BSONDocumentHandler[Sentence] = Macros.handler[Sentence]
+  implicit val reviewFormat: BSONDocumentHandler[Review] = Macros2.handler[Review]
+  implicit val sentenceFormat: BSONDocumentHandler[Sentence] = Macros2.handler[Sentence]
 
   case class SentenceIdReviews(@Key("_id") id: String, reviews: Seq[Review])
-  implicit val sirFormat: BSONDocumentHandler[SentenceIdReviews] = Macros.handler[SentenceIdReviews]
+  implicit val sirFormat: BSONDocumentHandler[SentenceIdReviews] = Macros2.handler[SentenceIdReviews]
 
   implicit val dateTimeHandler: BSONHandler[BSONDateTime, DateTime] =
     new BSONHandler[BSONDateTime, DateTime] {

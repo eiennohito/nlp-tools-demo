@@ -23,7 +23,7 @@ lazy val playserver = (project in file("play")).settings(
   serverLoading in Debian := Some(ServerLoader.Systemd)
 ).enablePlugins(PlayScala, PlayAkkaHttp2Support, DebianPlugin).
   aggregate(clients.map(projectToRef): _*).
-  dependsOn(shared2Jvm, `akane-knp-akka`, `akane-jumanpp-grpc`, `grpc-streaming`, `akane-testkit` % Test)
+  dependsOn(shared2Jvm, `akane-knp-akka`, `akane-jumanpp-grpc`, `grpc-streaming`, `bson-macros`, `akane-testkit` % Test)
   .settings(
     publishArtifact in (Compile, packageDoc) := false,
     publishArtifact in packageDoc := false,
@@ -64,7 +64,8 @@ lazy val scalajsclient = (project in file("scalajs")).settings(
 ).enablePlugins(ScalaJSPlugin, ScalaJSWeb).
   dependsOn(shared2Js)
 
-import sbtcrossproject.{crossProject, CrossType}
+import sbtcrossproject.CrossType
+import sbtcrossproject.CrossPlugin.autoImport.crossProject
 
 lazy val shared2 = crossProject(JSPlatform, JVMPlatform)
   .withoutSuffixFor(JVMPlatform)
@@ -112,6 +113,11 @@ lazy val `akane-testkit` = project in file("akane/testkit")
 lazy val `akane-jumanpp-grpc` = project in file("akane/jumanpp-grpc")
 
 lazy val `grpc-streaming` = project in file("grpc-akka-stream")
+
+lazy val `bson-macros` = (project in file("bson-macros"))
+    .settings(
+      libraryDependencies += "org.reactivemongo" %% "reactivemongo" % "0.16.2",
+    ).dependsOn(sharedJvm)
 
 fork in run := true
 

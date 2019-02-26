@@ -556,7 +556,8 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
         ^.cls := s"opt-block opt-span block-$key ann-selection",
         ^.key := key,
         ^.classSet(
-          "opt-selected" -> span.selected
+          "opt-selected" -> span.selected,
+          "custom-tags" -> span.target.hasCustomTags
         ),
         span.tokens.map { t =>
           <.div(

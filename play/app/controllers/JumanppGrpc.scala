@@ -2,7 +2,10 @@ package controllers
 
 import java.util.Locale
 
+import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.{Sink, Source}
 import code.AllowedFields
+import code.annotation.{ExampleToken, Sentence, Sentences}
 import code.grpc.LatticeDumpJppGrpcAnalyzer
 import code.transport.lattice._
 import com.ibm.icu.text.BreakIterator
@@ -12,13 +15,14 @@ import play.api.mvc.InjectedController
 import ws.kotonoha.akane.analyzers.jumanpp.grpc.{AnalysisRequest, JumanppConfig, RequestType}
 import ws.kotonoha.akane.analyzers.jumanpp.wire.lattice.{FieldValue, LatticeDump, LatticeNode}
 
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.{ExecutionContext, Future}
 
 class JumanppGrpcService @Inject()(
     ana: Provider[LatticeDumpJppGrpcAnalyzer],
     allowedFields: AllowedFields
-)(implicit ec: ExecutionContext) {
+)(implicit ec: ExecutionContext, amat: ActorMaterializer) {
 
   private def makeRequestImpl(sentence: EditableSentence): AnalysisRequest = {
     val sb = new StringBuilder
@@ -34,8 +38,33 @@ class JumanppGrpcService @Inject()(
       sb.append('\n')
     }
     AnalysisRequest(
+      key = sentence.id,
       sentence = sb.result(),
       `type` = RequestType.PartialAnnotation,
+      config = Some(
+        JumanppConfig( // full beam analysis w/o RNN
+                      globalBeamLeft = -1,
+                      globalBeamCheck = -1,
+                      ignoreRnn = true))
+    )
+  }
+
+  private def makeRawRequest(sentence: Sentence, maxLen: Int = 1024): AnalysisRequest = {
+    val sb = new StringBuilder
+    for {
+      block <- sentence.blocks
+      span = block.spans.head
+      token <- span.tokens
+    } {
+      sb.append(token.surface)
+    }
+
+    sb.setLength(sb.length min maxLen) // ignore characters after the first ones
+
+    AnalysisRequest(
+      key = sentence.id,
+      sentence = sb.result(),
+      `type` = RequestType.Normal,
       config = Some(
         JumanppConfig( // full beam analysis w/o RNN
                       globalBeamLeft = -1,
@@ -55,6 +84,67 @@ class JumanppGrpcService @Inject()(
 
   def analyze(in: AnalysisRequest): Future[LatticeDump] = {
     ana.get().analyze(in)
+  }
+
+  def checkTokens(data: Seq[Sentence]) = {
+    val byId = data.map(x => x.id -> x).toMap
+    val reqs = data.map(x => makeRawRequest(x))
+    val src = Source(reqs.toVector)
+    ana.get().stream(src).map(lat => markCustomTaggedSpans(byId(lat.comment), lat)).runWith(Sink.seq)
+  }
+
+  def checkTokens(data: Sentences): Future[Sentences] = {
+    checkTokens(data.sentences).map(sents => data.copy(sentences = sents))
+  }
+
+  private def isValidToken(tagIdxes: Map[String, Int], candidates: Traversable[LatticeNode], token: ExampleToken): Boolean = {
+    candidates.exists { node =>
+      token.tags.forall { case (k, v) =>
+        tagIdxes.get(k) match {
+          case Some(idx) => node.values(idx).value match {
+            case FieldValue.Value.String(xv) => v == xv
+            case _ => false
+          }
+          case _ => false
+        }
+      }
+    }
+  }
+
+  def markCustomTaggedSpans(sentence: Sentence, dump: LatticeDump): Sentence = {
+    val allTokens = new mutable.HashMap[String, mutable.HashSet[LatticeNode]]()
+    val tagIndices = dump.fieldNames.zipWithIndex.toMap
+
+    var i = 0
+    val iter = dump.boundaries.iterator
+    while (iter.hasNext) {
+      val bnd = iter.next()
+      bnd.nodes.foreach { node =>
+        val set = allTokens.getOrElseUpdate(node.surface, new mutable.HashSet[LatticeNode]())
+        set += node
+      }
+      i += 1
+    }
+
+    val newBlocks = sentence.blocks.map { b =>
+      if (b.spans.length > 1) {
+        val newSpans = b.spans.map { span =>
+          val hasCustom = span.tokens.exists { tok =>
+            val nodes = allTokens.get(tok.surface)
+            if (nodes.isEmpty) {
+              true
+            } else {
+              !isValidToken(tagIndices, nodes.get, tok)
+            }
+          }
+          span.copy(hasCustomTags = hasCustom)
+        }
+        b.copy(spans = newSpans)
+      } else {
+        b
+      }
+    }
+    sentence.copy(blocks = newBlocks)
   }
 }
 

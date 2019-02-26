@@ -1,8 +1,10 @@
 package code
 
+import akka.actor.ActorSystem
+import akka.stream.ActorMaterializer
 import code.annotation.AnnotationDbModule
 import code.grpc.LatticeDumpJppModule
-import com.google.inject.{Binder, Module}
+import com.google.inject.{Binder, Module, Provides, Singleton}
 
 /**
   * @author eiennohito
@@ -15,5 +17,11 @@ class MainModule extends Module {
     binder.install(new AnnotationDbModule)
     binder.install(new LatticeDumpJppModule)
     binder.install(new AllowedFieldsModule)
+  }
+
+  @Provides
+  @Singleton
+  def amat(asys: ActorSystem): ActorMaterializer = {
+    ActorMaterializer.create(asys)
   }
 }
