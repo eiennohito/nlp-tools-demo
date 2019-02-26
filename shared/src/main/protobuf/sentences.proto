@@ -65,6 +65,7 @@ message GetSentences {
     string query = 4;
     int32 from = 5;
     google.protobuf.Timestamp reviewedBefore = 6;
+    bool forReview = 7;
 }
 
 message SentenceRequest {

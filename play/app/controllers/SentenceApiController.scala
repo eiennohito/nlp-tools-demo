@@ -34,10 +34,11 @@ class SentenceApiController @Inject()(
 
     body.request match {
       case SentenceRequest.Request.Sentences(sents) =>
-        dbo
-          .getSentences(user, sents)
-          .flatMap(sents => jpp.checkTokens(sents))
-          .map(sents => Ok(LiftPB(sents)))
+        val rawFuture = dbo.getSentences(user, sents)
+        val processed = if (sents.forReview) {
+          rawFuture.flatMap(sents => jpp.checkTokens(sents))
+        } else rawFuture
+        processed.map(sents => Ok(LiftPB(sents)))
       case SentenceRequest.Request.Annotate(obj) =>
         val uid = if (user.admin) {
           BSONObjectID.parse(obj.annotatorId.id).getOrElse(user._id)

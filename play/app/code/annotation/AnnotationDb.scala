@@ -18,7 +18,21 @@ import reactivemongo.api.commands.bson.BSONAggregationFramework
 import reactivemongo.api.indexes.IndexType.Ascending
 import reactivemongo.api.{Cursor, DefaultDB, MongoConnection}
 import reactivemongo.bson.Macros.Annotations.Key
-import reactivemongo.bson.{BSON, BSONArray, BSONDateTime, BSONDocument, BSONDocumentHandler, BSONDouble, BSONElement, BSONHandler, BSONInteger, BSONObjectID, BSONRegex, BSONValue, Macros}
+import reactivemongo.bson.{
+  BSON,
+  BSONArray,
+  BSONDateTime,
+  BSONDocument,
+  BSONDocumentHandler,
+  BSONDouble,
+  BSONElement,
+  BSONHandler,
+  BSONInteger,
+  BSONObjectID,
+  BSONRegex,
+  BSONValue,
+  Macros
+}
 import scalapb.{GeneratedEnum, GeneratedEnumCompanion}
 import ws.kotonoha.akane.utils.XInt
 
@@ -278,7 +292,8 @@ object SentenceBSON {
   implicit val sentenceFormat: BSONDocumentHandler[Sentence] = Macros2.handler[Sentence]
 
   case class SentenceIdReviews(@Key("_id") id: String, reviews: Seq[Review])
-  implicit val sirFormat: BSONDocumentHandler[SentenceIdReviews] = Macros2.handler[SentenceIdReviews]
+  implicit val sirFormat: BSONDocumentHandler[SentenceIdReviews] =
+    Macros2.handler[SentenceIdReviews]
 
   implicit val dateTimeHandler: BSONHandler[BSONDateTime, DateTime] =
     new BSONHandler[BSONDateTime, DateTime] {
@@ -464,34 +479,41 @@ class SentenceDbo @Inject()(
   }
 
   def historyFor(uid: BSONObjectID, maxSents: Int): Future[Sentences] = {
-    coll.aggregateWith[HistoryObject]() { afw =>
-      afw.Match(BSONDocument(
-        "reviews.annotatorId" -> uid
-      )) -> List(
-        afw.UnwindField("reviews"),
-        afw.Project(BSONDocument(
-          "reviews" -> 1
-        )),
-        afw.Match(BSONDocument(
-          "reviews.annotatorId" -> uid
-        )),
-        afw.Sort(
-          afw.Descending("reviews.reviewedOn")
-        ),
-        afw.Limit(maxSents)
-      )
-    }.collect[Vector](maxSents, Cursor.FailOnError()).flatMap { hist =>
-      val ids = hist.map(_._id)
-      val q = BSONDocument(
-        "_id" -> BSONDocument(
-          "$in" -> ids
+    coll
+      .aggregateWith[HistoryObject]() { afw =>
+        afw.Match(
+          BSONDocument(
+            "reviews.annotatorId" -> uid
+          )) -> List(
+          afw.UnwindField("reviews"),
+          afw.Project(
+            BSONDocument(
+              "reviews" -> 1
+            )),
+          afw.Match(
+            BSONDocument(
+              "reviews.annotatorId" -> uid
+            )),
+          afw.Sort(
+            afw.Descending("reviews.reviewedOn")
+          ),
+          afw.Limit(maxSents)
         )
-      )
-      coll.find(q).cursor[Sentence]().collect[Vector](maxSents, Cursor.FailOnError()).map { sents =>
-        val byId = sents.map(s => s.id -> s).toMap
-        Sentences(ids.map(id => byId(id)))
       }
-    }
+      .collect[Vector](maxSents, Cursor.FailOnError())
+      .flatMap { hist =>
+        val ids = hist.map(_._id)
+        val q = BSONDocument(
+          "_id" -> BSONDocument(
+            "$in" -> ids
+          )
+        )
+        coll.find(q).cursor[Sentence]().collect[Vector](maxSents, Cursor.FailOnError()).map {
+          sents =>
+            val byId = sents.map(s => s.id -> s).toMap
+            Sentences(ids.map(id => byId(id)))
+        }
+      }
   }
 
   def getSentences(user: AnnotationToolUser, req: GetSentences): Future[Sentences] = {
@@ -559,10 +581,9 @@ class SentenceDbo @Inject()(
       "_id" -> 1
     )
 
-    logger.debug(s"search=${BSONDocument.pretty(q)}")
+    logger.debug(s"max=$max skip=${req.from} search=${BSONDocument.pretty(q)}")
 
     val itemCount = coll.count(Some(q))
-
     val cursor = coll.find(q).skip(req.from).sort(sort).cursor[Sentence]()
     val items = cursor.collect(max, Cursor.FailOnError[Seq[Sentence]]())
 

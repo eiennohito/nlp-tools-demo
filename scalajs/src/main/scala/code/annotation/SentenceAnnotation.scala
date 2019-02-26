@@ -19,7 +19,8 @@ class SentenceApi(api: ApiService, uid: ObjId) {
       limit: Int = 15): Future[Seq[Sentence]] = {
     val msg = baseQuery.copy(
       exceptIds = ignore.distinct,
-      limit = limit
+      limit = limit,
+      forReview = true
     )
 
     val wrapper = SentenceRequest(
