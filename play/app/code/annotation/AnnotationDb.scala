@@ -14,6 +14,8 @@ import org.joda.time.DateTime
 import play.api.Configuration
 import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.api.commands.UpdateWriteResult
+import reactivemongo.api.commands.bson.BSONAggregationFramework
+import reactivemongo.api.indexes.IndexType.Ascending
 import reactivemongo.api.{Cursor, DefaultDB, MongoConnection}
 import reactivemongo.bson.Macros.Annotations.Key
 import reactivemongo.bson.{BSON, BSONArray, BSONDateTime, BSONDocument, BSONDocumentHandler, BSONDouble, BSONElement, BSONHandler, BSONInteger, BSONObjectID, BSONRegex, BSONValue, Macros}
@@ -454,6 +456,42 @@ class SentenceDbo @Inject()(
     import MongoStream._
 
     coll.find(q).sort(sort).stream[Sentence]()
+  }
+
+  case class HistoryObject(_id: String, reviews: Review)
+  object HistoryObject {
+    implicit val reads = Macros2.reader[HistoryObject]
+  }
+
+  def historyFor(uid: BSONObjectID, maxSents: Int): Future[Sentences] = {
+    coll.aggregateWith[HistoryObject]() { afw =>
+      afw.Match(BSONDocument(
+        "reviews.annotatorId" -> uid
+      )) -> List(
+        afw.UnwindField("reviews"),
+        afw.Project(BSONDocument(
+          "reviews" -> 1
+        )),
+        afw.Match(BSONDocument(
+          "reviews.annotatorId" -> uid
+        )),
+        afw.Sort(
+          afw.Descending("reviews.reviewedOn")
+        ),
+        afw.Limit(maxSents)
+      )
+    }.collect[Vector](maxSents, Cursor.FailOnError()).flatMap { hist =>
+      val ids = hist.map(_._id)
+      val q = BSONDocument(
+        "_id" -> BSONDocument(
+          "$in" -> ids
+        )
+      )
+      coll.find(q).cursor[Sentence]().collect[Vector](maxSents, Cursor.FailOnError()).map { sents =>
+        val byId = sents.map(s => s.id -> s).toMap
+        Sentences(ids.map(id => byId(id)))
+      }
+    }
   }
 
   def getSentences(user: AnnotationToolUser, req: GetSentences): Future[Sentences] = {

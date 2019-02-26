@@ -75,6 +75,7 @@ message SentenceRequest {
         ReviewSentence review = 4;
         ReportAllBad bothBad = 5;
         int32 recalcStatuses = 6;
+        ReviewHistory history = 7;
     }
 }
 
@@ -114,4 +115,8 @@ message ReportAllBad {
 
 message ReportInvalidResult {
     EditableSentence sentence = 1;
+}
+
+message ReviewHistory {
+    int32 numElements = 1;
 }

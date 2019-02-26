@@ -6,6 +6,7 @@ import japgolly.scalajs.react._
 import japgolly.scalajs.react.extra.StateSnapshot
 import japgolly.scalajs.react.vdom.html_<^._
 
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -26,6 +27,15 @@ class SentenceApi(api: ApiService, uid: ObjId) {
     )
 
     api.sentenceCall[Sentences](wrapper).map(_.sentences)
+  }
+
+  def fetchHistory(): Future[Seq[Sentence]] = {
+    val call = SentenceRequest(
+      SentenceRequest.Request.History(
+        ReviewHistory(15)
+      )
+    )
+    api.sentenceCall[Sentences](call).map(_.sentences)
   }
 
   def annotate(ann: Annotate): Future[Annotation] = {
@@ -101,6 +111,100 @@ class SentenceApi(api: ApiService, uid: ObjId) {
   }
 }
 
+case class RecentSentenceSpan(
+    content: String,
+    target: Boolean
+)
+
+case class RecentSentence(id: String, spans: Seq[RecentSentenceSpan]) {
+  def render() = {
+    val link = AnnotationTool.routectCtl.pathFor(ViewSentence(id))
+    <.li(
+      ^.key := id,
+      <.a.toNewWindow(link.abs(AnnotationTool.routectCtl.baseUrl).value)(
+        spans.map { s =>
+          <.span(
+            ^.classSet("target-span" -> s.target),
+            s.content
+          )
+        }.toTagMod
+      )
+    )
+  }
+}
+
+object RecentSentence {
+  def apply(s: Sentence): RecentSentence = {
+    val spanBuffer = new ArrayBuffer[RecentSentenceSpan]()
+    val bldr = new StringBuilder
+
+    // step1: convert sentence spans to displayable objects
+    var length = 0
+    s.blocks.foreach { b =>
+      if (b.spans.size > 1) {
+        bldr.clear()
+        b.spans.head.tokens.foreach(t => bldr.append(t.surface))
+        val str = bldr.result()
+        spanBuffer += RecentSentenceSpan(str, true)
+        length += str.length
+      } else {
+        val str = b.spans.head.tokens.head.surface
+        spanBuffer += RecentSentenceSpan(str, false)
+        length += str.length
+      }
+    }
+
+    // if sentence is short, we are done
+    if (length < 20) {
+      return RecentSentence(s.id, spanBuffer)
+    }
+
+    var toCut = length - 20
+
+    // compression step one: discard parts of non-target tokens
+    val cutCandidates = new mutable.PriorityQueue[(Int, RecentSentenceSpan)]()(Ordering.by {
+      case (a, b) => -b.content.length
+    })
+    spanBuffer.zipWithIndex.foreach {
+      case (x, i) => if (!x.target && x.content.length > 6) cutCandidates.enqueue(i -> x)
+    }
+
+    while (cutCandidates.nonEmpty && toCut > 0) {
+      val (idx, el) = cutCandidates.dequeue()
+      val content = el.content
+      val clen = content.length
+      val newLen = (clen - toCut) max 6
+      val newStr = if (idx == 0) {
+        "…" + content.substring(clen - newLen, clen)
+      } else if (idx == spanBuffer.length - 1) {
+        content.substring(0, newLen) + "…"
+      } else {
+        val half = newLen / 2
+        content.substring(0, half) + "…" + content.substring(clen - half, clen)
+      }
+      spanBuffer(idx) = RecentSentenceSpan(newStr, false)
+      toCut -= (clen - newLen)
+    }
+
+    if (toCut <= 0) {
+      return RecentSentence(s.id, spanBuffer)
+    }
+
+    // compression step two: discard sentence from the end
+
+    var idx = spanBuffer.length - 1
+    while (idx > 0 && toCut > 0) {
+      val item = spanBuffer.remove(idx)
+      toCut -= item.content.length
+      idx -= 1
+    }
+
+    spanBuffer.append(RecentSentenceSpan("…", false))
+
+    RecentSentence(s.id, spanBuffer)
+  }
+}
+
 case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) {
 
   private val api = new SentenceApi(apiSvc, uid)
@@ -156,8 +260,9 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
   }
 
   case class PageState(
-      next: List[Sentence] = Nil,
-      current: Option[CurrentSentence] = None
+      next: List[Sentence],
+      current: Option[CurrentSentence],
+      history: Vector[RecentSentence]
   ) {
 
     private def makeEditable(sentence: Sentence) = {
@@ -205,11 +310,18 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
       current match {
         case None =>
           nextSentences match {
-            case x :: xs => PageState(xs, Some(makeCurrent(x)))
-            case _       => PageState(Nil, None)
+            case x :: xs => copy(next = xs, current = Some(makeCurrent(x)))
+            case _       => copy(next = Nil, current = None)
           }
-        case s @ Some(_) => PageState(nextSentences, s)
+        case s @ Some(_) => copy(next = nextSentences, current = s)
       }
+    }
+
+    def addHistory(s: Sentence): PageState = {
+      val newEntry = RecentSentence(s)
+      val oldEntries = history.filter(_.id != s.id)
+      val newHistory = newEntry +: oldEntries.slice(0, 29)
+      copy(history = newHistory)
     }
 
     def withEditable(blk: SentenceBlock): PageState = {
@@ -239,11 +351,15 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
     }
 
     def moveToNext(): PageState = {
-      next match {
+      val st = next match {
         case x :: xs =>
           api.publishReview(x.id, uid)
-          PageState(xs, Some(makeCurrent(x)))
-        case Nil => PageState(Nil, None)
+          copy(next = xs, current = Some(makeCurrent(x)))
+        case Nil => copy(next = Nil, current = None)
+      }
+      current match {
+        case Some(s) => st.addHistory(s.data)
+        case _       => st
       }
     }
 
@@ -338,6 +454,41 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
       }
     }
 
+    def renderHistory(data: Vector[RecentSentence]) = {
+      <.ul(
+        ^.cls := "sentence-history",
+        data.map { rs =>
+          rs.render()
+        }.toVdomArray
+      )
+    }
+
+    def renderSentence(state: PageImplProps, theState: PageState, s: CurrentSentence) = {
+      <.div(
+        ^.cls := "sentence-container",
+        <.div(
+          ^.cls := "sentence-info",
+          AnnotationTool.routectCtl.link(ViewSentence(s.id))(
+            "S-ID: ",
+            s.id
+          ),
+          <.div(
+            <.h5("History"),
+            renderHistory(theState.history)
+          )
+        ),
+        SentenceView(
+          SentenceProps(
+            s.data,
+            state.nextAction,
+            span => modState(_.withEditable(span)),
+            annCmd => modState(_.applyAnnotate(annCmd)),
+            state.showCounts
+          ))
+      )
+
+    }
+
     def render(state: PageImplProps): VdomElement = {
       val theState = state.state.value
       theState.currentSentence match {
@@ -345,14 +496,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
         case Some(s) =>
           s.editable match {
             case None =>
-              SentenceView(
-                SentenceProps(
-                  s.data,
-                  state.nextAction,
-                  span => modState(_.withEditable(span)),
-                  annCmd => modState(_.applyAnnotate(annCmd)),
-                  state.showCounts
-                ))
+              renderSentence(state, theState, s)
             case Some(es) =>
               EditorFrame(ExampleEditorProps(es, handleEditEvent))
           }
@@ -381,6 +525,15 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
         api.fetchNextSentences(props.search, s.ids).map { sents =>
           scope.modState(_.addSentences(sents)).runNow()
         }
+        api.fetchHistory().map { sents =>
+          scope
+            .modState { st =>
+              val hsents = sents.map(s => RecentSentence(s))
+              val both = st.history ++ hsents
+              st.copy(history = both)
+            }
+            .runNow()
+        }
       }.void
 
     def maybeGetNewSentences() = scope.state.flatMap { s =>
@@ -407,7 +560,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
 
   val Page = ScalaComponent
     .builder[ReviewPageProps]("AnnotationPage")
-    .initialState(new PageState)
+    .initialState(PageState(Nil, None, Vector.empty))
     .renderBackend[PageBackend]
     .componentDidMount(_.backend.init())
     .build
@@ -493,20 +646,24 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
 
     final case class DisplayTag(
         key: String,
-      value: String,
-      same: Boolean
+        value: String,
+        same: Boolean
     )
 
     final case class DisplayToken(token: ExampleToken, otags: Map[String, String], lenEq: Boolean) {
       def surface = token.surface
 
-      val tags = token.tags.map { case (key, value) =>
-        val sameTag = otags.get(key) match {
-          case Some(`value`) => lenEq
-          case _ => false
+      val tags = token.tags
+        .map {
+          case (key, value) =>
+            val sameTag = otags.get(key) match {
+              case Some(`value`) => lenEq
+              case _             => false
+            }
+            DisplayTag(key, value, sameTag)
         }
-        DisplayTag(key, value, sameTag)
-      }.toSeq.sortBy(_.key)
+        .toSeq
+        .sortBy(_.key)
     }
 
     final case class DisplaySpan(target: TokenSpan, other: TokenSpan, curAnn: Annotation) {
@@ -571,21 +728,20 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
               ).when(showCounts && count != 0)
             ),
             t.tags.map { tag =>
+              <.span(
+                ^.cls := "token-data tag",
+                ^.classSet("tag-same" -> tag.same),
                 <.span(
-                  ^.cls := "token-data tag",
-                  ^.classSet("tag-same" -> tag.same),
-                  <.span(
-                    ^.cls := "key",
-                    tag.key,
-                    ":"
-                  ),
-                  <.span(
-                    ^.cls := "value",
-                    tag.value
-                  )
+                  ^.cls := "key",
+                  tag.key,
+                  ":"
+                ),
+                <.span(
+                  ^.cls := "value",
+                  tag.value
                 )
-              }
-              .toTagMod
+              )
+            }.toTagMod
           )
         }.toTagMod,
         ^.onClick --> annotateAs(span.curAnn, span.newAnn)
@@ -657,10 +813,6 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
       val s = state.sentence
       <.div(
         ^.cls := "sentence",
-        AnnotationTool.routectCtl.link(ViewSentence(s.id))(
-          "S-ID: ",
-          s.id
-        ),
         <.div(
           ^.cls := "parts",
           s.blocks
@@ -743,7 +895,7 @@ case class SentenceAnnotation(apiSvc: ApiService, uid: ObjId, isAdmin: Boolean) 
     val f = apiSvc.sentenceById(id).map { so =>
       so.map { s =>
         api.publishReview(s.id, uid)
-        PageState(Nil, Some(makeCurrent(s)))
+        PageState(Nil, Some(makeCurrent(s)), Vector.empty)
       }
     }
     SentenceDetailState(id, f)

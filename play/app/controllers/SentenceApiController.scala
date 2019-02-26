@@ -73,6 +73,8 @@ class SentenceApiController @Inject()(
         } else {
           Future.successful(Forbidden("You are not admin"))
         }
+      case SentenceRequest.Request.History(ReviewHistory(num)) =>
+        dbo.historyFor(user._id, num).map(r => Ok(LiftPB(r)))
       case _ => Future.successful(NotImplemented)
     }
   }
