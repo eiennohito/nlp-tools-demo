@@ -6,18 +6,16 @@ import java.util.concurrent.atomic.AtomicReference
 
 import akka.stream.Materializer
 import akka.stream.scaladsl.{Flow, Sink, Source}
+import code.Slf4jLoggingAdapter
 import com.google.inject.Provides
 import com.typesafe.config.Config
+import com.typesafe.scalalogging.StrictLogging
 import io.grpc.{CallOptions, ManagedChannel, ManagedChannelBuilder}
 import javax.inject.{Inject, Provider, Singleton}
 import net.codingwell.scalaguice.ScalaModule
 import play.api.inject.ApplicationLifecycle
 import ws.kotonoha.akane.analyzers.AsyncAnalyzer
-import ws.kotonoha.akane.analyzers.jumanpp.grpc.{
-  AnalysisRequest,
-  JumanppGrpcConfig,
-  JumanppGrpcProcess
-}
+import ws.kotonoha.akane.analyzers.jumanpp.grpc.{AnalysisRequest, JumanppGrpcConfig, JumanppGrpcProcess}
 import ws.kotonoha.akane.analyzers.jumanpp.wire.lattice.LatticeDump
 
 import scala.collection.JavaConverters._
@@ -55,13 +53,13 @@ class LatticeDumpJppModule extends ScalaModule {
 
 class LatticeDumpJppGrpcAnalyzerImpl(call: Flow[AnalysisRequest, LatticeDump, _])(
     implicit amat: Materializer)
-    extends LatticeDumpJppGrpcAnalyzer {
+    extends LatticeDumpJppGrpcAnalyzer with StrictLogging {
   override def analyze(input: AnalysisRequest)(
       implicit ec: ExecutionContext): Future[LatticeDump] = {
     Source.single(input).via(call).runWith(Sink.head)
   }
   override def stream[T](in: Source[AnalysisRequest, T]): Source[LatticeDump, T] = {
-    in.via(call)
+    in.flatMapConcat(x => Source.single(x).via(call))
   }
 }
 

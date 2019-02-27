@@ -54,7 +54,6 @@ class SentenceApiController @Inject()(
           dbo.mergeEdits(uid, req).map(x => Ok(LiftPB(x)))
         }
       case SentenceRequest.Request.Review(req) =>
-        logger.debug(req.toString)
         val uid = if (user.admin) {
           BSONObjectID.parse(req.annotatorId.id).getOrElse(user._id)
         } else user._id
